@@ -10,6 +10,20 @@ from pathlib import Path
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox, scrolledtext
 
+
+class StreamToLog:
+    """将 print() 输出重定向到 GUI 日志和日志文件"""
+    def __init__(self, app):
+        self.app = app
+
+    def write(self, text):
+        text = text.strip()
+        if text:
+            self.app.task_queue.put(("log", text))
+
+    def flush(self):
+        pass
+
 # 打包后 exe 运行时指向 exe 所在目录，开发时指向源码目录
 if getattr(sys, 'frozen', False):
     PROJECT_ROOT = Path(sys.executable).parent
@@ -34,6 +48,14 @@ class MonitorApp:
         self.config = self.load_config()
         self.task_queue = queue.Queue()
         self.running = False
+        self.stream_redirector = StreamToLog(self)
+
+        # 日志文件
+        self.log_file = PROJECT_ROOT / "monitor.log"
+        with open(self.log_file, "w", encoding="utf-8") as f:
+            f.write(f"GEO 品牌监测工具 - 运行日志\n")
+            f.write(f"启动时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+            f.write(f"{'=' * 60}\n\n")
 
         self.build_ui()
         self.load_config_values()
@@ -163,7 +185,9 @@ class MonitorApp:
         self.btn_watch.pack(side=tk.LEFT)
         ttk.Separator(btn_frame, orient=tk.VERTICAL).pack(side=tk.LEFT, fill=tk.Y, padx=12)
         self.btn_folder = ttk.Button(btn_frame, text="打开报告文件夹", command=self.open_report_folder)
-        self.btn_folder.pack(side=tk.LEFT)
+        self.btn_folder.pack(side=tk.LEFT, padx=(0, 4))
+        self.btn_log = ttk.Button(btn_frame, text="查看运行日志", command=self.open_log_file)
+        self.btn_log.pack(side=tk.LEFT)
 
         # Row 11-12: Log area
         ttk.Label(frame, text="运行日志：").grid(row=11, column=0, sticky=tk.W, pady=(PAD, 0))
@@ -209,6 +233,12 @@ class MonitorApp:
         self.log_area.insert(tk.END, msg + "\n")
         self.log_area.see(tk.END)
         self.log_area.configure(state=tk.DISABLED)
+        # 同时写入日志文件
+        try:
+            with open(self.log_file, "a", encoding="utf-8") as f:
+                f.write(f"{datetime.now().strftime('%H:%M:%S')} {msg}\n")
+        except Exception:
+            pass
 
     def set_running(self, running: bool):
         self.running = running
@@ -223,6 +253,12 @@ class MonitorApp:
             # Create it and open anyway
             monitor_dir.mkdir(parents=True, exist_ok=True)
             os.startfile(str(monitor_dir))
+
+    def open_log_file(self):
+        if self.log_file.exists():
+            os.startfile(str(self.log_file))
+        else:
+            messagebox.showinfo("提示", "暂无运行日志")
 
     # ─── Execution ────────────────────────────────────────
 
@@ -259,16 +295,21 @@ class MonitorApp:
 
     def _task_now(self):
         """Background thread: run one round immediately"""
+        old_stdout = sys.stdout
+        sys.stdout = self.stream_redirector
         try:
             self._run_single_round("now", datetime.now().hour)
         except Exception as e:
             self.log(f"[!] 错误: {e}")
         finally:
+            sys.stdout = old_stdout
             self.set_running(False)
             self.log("[*] 执行完毕")
 
     def _task_watch(self):
         """Background thread: wait for scheduled hours"""
+        old_stdout = sys.stdout
+        sys.stdout = self.stream_redirector
         try:
             hours = self.get_selected_hours()
             current_hour = datetime.now().hour
@@ -300,6 +341,7 @@ class MonitorApp:
         except Exception as e:
             self.log(f"[!] 错误: {e}")
         finally:
+            sys.stdout = old_stdout
             self.set_running(False)
             self.log("[*] 定时监测完成")
 

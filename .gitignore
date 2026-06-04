@@ -27,6 +27,9 @@ dist/
 # Generated output
 output/
 
+# Runtime log
+monitor.log
+
 # Config with real API keys (use config.example.yaml as template)
 config.yaml
 
