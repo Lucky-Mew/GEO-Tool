@@ -1,0 +1,15 @@
+doubao:
+  chrome_profile: C:/Users/人事部/AppData/Local/Google/Chrome/User Data/Default
+  delay_between_questions: 60
+  reply_wait: 60
+  timeout: 60
+  url: https://www.doubao.com
+llm_api:
+  api_key: sk-sp-D.HEXEX.XV1N.MEYCIQChOB0MwtGbt7rs9keUIDFYESRlb5ksh5tY3BKjsdTb+wIhAJiv3Yi+WWLj8tr6UUNShYsyNAY6SzMLz5s8/SLdT1/S
+  base_url: https://token-plan.cn-beijing.maas.aliyuncs.com/apps/anthropic
+  model: qwen3.6-flash
+  provider: qwen
+monitor:
+  brand: 完形康躰
+  question: 康躰脂雕哪家好
+  schedule_hours: []

@@ -1,0 +1,31 @@
+# Claude Code 调试输出
+.claude/debug_output.txt
+.claude/stdin_*.txt
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Python
+__pycache__/
+*.pyc
+.env
+.venv/
+venv/
+
+# PyInstaller build artifacts
+build/
+dist/
+*.spec
+
+# Generated output
+output/
+
+# Node
+node_modules/
