@@ -1,0 +1,15 @@
+doubao:
+  chrome_profile: C:/Users/你的用户名/AppData/Local/Google/Chrome/User Data/Default
+  delay_between_questions: 60
+  reply_wait: 60
+  timeout: 60
+  url: https://www.doubao.com
+llm_api:
+  api_key: 在此填入你的API Key
+  base_url: https://token-plan.cn-beijing.maas.aliyuncs.com/apps/anthropic
+  model: qwen3.6-flash
+  provider: qwen
+monitor:
+  brand: 你的品牌名
+  question: 你想监测的问题
+  schedule_hours: []

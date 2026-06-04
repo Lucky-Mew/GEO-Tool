@@ -27,5 +27,8 @@ dist/
 # Generated output
 output/
 
+# Config with real API keys (use config.example.yaml as template)
+config.yaml
+
 # Node
 node_modules/
