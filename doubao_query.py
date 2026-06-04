@@ -6,53 +6,90 @@ import subprocess
 from playwright.sync_api import sync_playwright
 
 
-def _find_chrome_exe() -> str:
-    candidates = [
+def _find_chrome_exe(config_browser_path: str = "", browser_type: str = "Chrome") -> str:
+    """查找浏览器可执行文件。优先使用配置指定的路径，否则按 browser_type 优先检测。"""
+    # 1. 配置中指定的路径
+    if config_browser_path and os.path.isfile(config_browser_path):
+        print(f"    [*] 使用配置指定的浏览器: {config_browser_path}")
+        return config_browser_path
+
+    chrome_candidates = [
         os.path.expandvars(r"%LOCALAPPDATA%\Google\Chrome\Application\chrome.exe"),
         r"C:\Program Files\Google\Chrome\Application\chrome.exe",
         r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
     ]
-    for path in candidates:
-        if os.path.exists(path):
-            return path
+    edge_candidates = [
+        r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
+        r"C:\Program Files\Microsoft\Edge\Application\msedge.exe",
+        os.path.expandvars(r"%LOCALAPPDATA%\Microsoft\Edge\Application\msedge.exe"),
+    ]
+
+    # 按 browser_type 决定优先级
+    if browser_type == "Edge":
+        order = [("Edge", edge_candidates), ("Chrome", chrome_candidates)]
+    else:
+        order = [("Chrome", chrome_candidates), ("Edge", edge_candidates)]
+
+    for label, candidates in order:
+        for path in candidates:
+            if os.path.isfile(path):
+                print(f"    [*] 检测到 {label}: {path}")
+                return path
+
+    print("    [!] 未找到 Chrome 或 Edge 浏览器")
     return ""
 
 
-def _find_default_profile() -> str:
-    """Auto-detect Chrome default profile on Windows"""
-    user_data = os.path.expandvars(r"%LOCALAPPDATA%\Google\Chrome\User Data")
-    default_path = os.path.join(user_data, "Default")
-    if os.path.isdir(default_path) and os.path.exists(os.path.join(default_path, "Login Data")):
-        return default_path
-    for name in ["Default", "Profile 1", "Profile 2", "Profile 3"]:
-        profile_path = os.path.join(user_data, name)
-        if os.path.isdir(profile_path) and os.path.exists(os.path.join(profile_path, "Login Data")):
-            return profile_path
+def _find_default_profile(browser_type: str = "Chrome") -> str:
+    """Auto-detect Chrome or Edge default profile on Windows.
+
+    browser_type: "Chrome" or "Edge"
+    """
+    browsers = {
+        "Chrome": (r"%LOCALAPPDATA%\Google\Chrome\User Data", "Chrome"),
+        "Edge": (r"%LOCALAPPDATA%\Microsoft\Edge\User Data", "Edge"),
+    }
+
+    # 先找指定的浏览器
+    primary_key = browser_type if browser_type in browsers else "Chrome"
+    fallback_key = "Edge" if primary_key == "Chrome" else "Chrome"
+
+    for key in [primary_key, fallback_key]:
+        user_data_template, label = browsers[key]
+        user_data = os.path.expandvars(user_data_template)
+        for name in ["Default", "Profile 1", "Profile 2", "Profile 3"]:
+            profile_path = os.path.join(user_data, name)
+            if os.path.isdir(profile_path) and os.path.exists(os.path.join(profile_path, "Login Data")):
+                print(f"    [*] 检测到 {label} profile: {profile_path}")
+                return profile_path
+
     return ""
 
 
 def _find_cdp_port() -> int | None:
     """查找已运行 Chrome 的调试端口。返回端口号或 None。"""
-    try:
-        result = subprocess.run(
-            ["tasklist", "/V", "/FI", "IMAGENAME eq chrome.exe"],
-            capture_output=True, text=True, shell=True
-        )
-        if result.returncode == 0 and "chrome.exe" in result.stdout.lower():
-            # Chrome 正在运行，尝试常见调试端口
-            for port in [9222, 9223, 9224]:
-                try:
-                    resp = subprocess.run(
-                        ["curl", "-s", "--connect-timeout", "2", f"http://127.0.0.1:{port}/json/version"],
-                        capture_output=True, text=True, timeout=5, shell=True
-                    )
-                    if resp.returncode == 0 and "webSocketDebuggerUrl" in resp.stdout:
-                        print(f"    [*] 检测到已有 Chrome 调试端口 {port}")
-                        return port
-                except Exception:
-                    pass
-    except Exception:
-        pass
+    # 检查 Chrome 和 Edge
+    for browser_name in ["chrome.exe", "msedge.exe"]:
+        try:
+            result = subprocess.run(
+                ["tasklist", "/V", "/FI", f"IMAGENAME eq {browser_name}"],
+                capture_output=True, text=True, shell=True
+            )
+            if result.returncode == 0 and browser_name in result.stdout.lower():
+                # 浏览器正在运行，尝试常见调试端口
+                for port in [9222, 9223, 9224]:
+                    try:
+                        resp = subprocess.run(
+                            ["curl", "-s", "--connect-timeout", "2", f"http://127.0.0.1:{port}/json/version"],
+                            capture_output=True, text=True, timeout=5, shell=True
+                        )
+                        if resp.returncode == 0 and "webSocketDebuggerUrl" in resp.stdout:
+                            print(f"    [*] 检测到已有 {browser_name} 调试端口 {port}")
+                            return port
+                    except Exception:
+                        pass
+        except Exception:
+            pass
     return None
 
 
@@ -175,27 +212,29 @@ def run_doubao_queries(config: dict, questions: list[str]) -> list[str]:
     url = doubao_config.get("url", "https://www.doubao.com")
     reply_wait = doubao_config.get("reply_wait", 60)
     chrome_profile = doubao_config.get("chrome_profile", "").strip()
+    browser_path = doubao_config.get("browser_path", "").strip()
+    browser_type = doubao_config.get("browser", "Chrome").strip()
 
-    chrome_exe = _find_chrome_exe()
+    chrome_exe = _find_chrome_exe(browser_path, browser_type)
     if not chrome_exe:
-        print("    [!] Chrome not found")
+        print("    [!] 未找到浏览器（Chrome 或 Edge），请在界面选择浏览器或手动指定路径")
         return [f"[No browser] {q}" for q in questions]
 
     if not chrome_profile:
-        chrome_profile = _find_default_profile()
+        chrome_profile = _find_default_profile(browser_type)
 
     if not chrome_profile or not os.path.isdir(chrome_profile):
-        print("    [!] No Chrome profile found!")
-        return [f"[No Chrome profile] {q}" for q in questions]
+        print(f"    [!] 未找到 {browser_type} profile，请先点击自动检测或手动填写路径")
+        return [f"[No profile] {q}" for q in questions]
 
-    # 尝试连接已有 Chrome
+    # 尝试连接已有浏览器
     cdp_port = _find_cdp_port()
     if cdp_port is not None:
-        print(f"    [*] 连接已有 Chrome 窗口 (CDP port {cdp_port})...")
+        print(f"    [*] 连接已有浏览器窗口 (CDP port {cdp_port})...")
         return _run_with_existing_browser(cdp_port, url, reply_wait, questions, doubao_config)
 
-    # 启动新 Chrome
-    print(f"    [*] 启动新 Chrome 窗口...")
+    # 启动新浏览器
+    print(f"    [*] 启动新 {browser_type} 窗口...")
     return _run_with_profile(chrome_exe, chrome_profile, url, reply_wait, questions, doubao_config)
 
 

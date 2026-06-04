@@ -1,4 +1,6 @@
 doubao:
+  browser: Chrome           # 浏览器类型：Chrome 或 Edge（Windows 自带）
+  # browser_path:           # 浏览器路径（可选，留空则自动检测）
   chrome_profile: C:/Users/你的用户名/AppData/Local/Google/Chrome/User Data/Default
   delay_between_questions: 60
   reply_wait: 60

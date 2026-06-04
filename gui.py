@@ -77,6 +77,7 @@ class MonitorApp:
             "schedule_hours": self.get_selected_hours(),
         }
         self.config.setdefault("doubao", {})
+        self.config["doubao"]["browser"] = self.var_browser.get()
         self.config["doubao"]["chrome_profile"] = self.var_profile.get().strip()
         self.config["llm_api"] = {
             "provider": self.var_provider.get(),
@@ -92,6 +93,7 @@ class MonitorApp:
         self.var_question.set(mon.get("question", ""))
         self.var_brand.set(mon.get("brand", ""))
         db = self.config.get("doubao", {})
+        self.var_browser.set(db.get("browser", "Chrome"))
         self.var_profile.set(db.get("chrome_profile", ""))
         llm = self.config.get("llm_api", {})
         self.var_provider.set(llm.get("provider", "qwen"))
@@ -122,11 +124,15 @@ class MonitorApp:
         ttk.Entry(frame, textvariable=self.var_brand, width=55).grid(
             row=1, column=1, columnspan=3, sticky=tk.EW, pady=PAD)
 
-        # Row 2: Chrome profile
-        ttk.Label(frame, text="Chrome 路径：").grid(row=2, column=0, sticky=tk.W, pady=PAD)
+        # Row 2: Browser selection + profile path
+        ttk.Label(frame, text="浏览器：").grid(row=2, column=0, sticky=tk.W, pady=PAD)
+        self.var_browser = tk.StringVar()
+        browser_cb = ttk.Combobox(frame, textvariable=self.var_browser, width=10,
+                                   state="readonly", values=["Chrome", "Edge"])
+        browser_cb.grid(row=2, column=1, sticky=tk.W, pady=PAD, padx=(0, 8))
         self.var_profile = tk.StringVar()
-        ttk.Entry(frame, textvariable=self.var_profile, width=42).grid(
-            row=2, column=1, columnspan=2, sticky=tk.EW, pady=PAD)
+        ttk.Entry(frame, textvariable=self.var_profile, width=38).grid(
+            row=2, column=2, sticky=tk.EW, pady=PAD)
         ttk.Button(frame, text="自动检测", command=self.auto_detect_profile).grid(
             row=2, column=3, padx=(4, 0), pady=PAD)
 
@@ -200,14 +206,23 @@ class MonitorApp:
     # ─── Helpers ──────────────────────────────────────────
 
     def auto_detect_profile(self):
+        browser_type = self.var_browser.get()
         from doubao_query import _find_default_profile
-        profile = _find_default_profile()
+        profile = _find_default_profile(browser_type)
         if profile:
             self.var_profile.set(profile)
-            self.log(f"[*] 自动检测到 Chrome profile: {profile}")
+            self.log(f"[*] 自动检测到 {browser_type} profile: {profile}")
         else:
-            self.log("[!] 未检测到 Chrome profile，请手动输入或确保已安装 Chrome")
-            messagebox.showwarning("提示", "未检测到 Chrome profile")
+            # 尝试另一个浏览器
+            fallback = "Edge" if browser_type == "Chrome" else "Chrome"
+            profile2 = _find_default_profile(fallback)
+            if profile2:
+                self.var_browser.set(fallback)
+                self.var_profile.set(profile2)
+                self.log(f"[*] 未找到 {browser_type}，自动切换到 {fallback}: {profile2}")
+            else:
+                self.log(f"[!] 未检测到 Chrome 或 Edge profile，请手动输入")
+                messagebox.showwarning("提示", "未检测到 Chrome 或 Edge profile")
 
     def get_selected_hours(self) -> list[int]:
         hours = sorted(h for h, v in self.hour_vars.items() if v.get())
