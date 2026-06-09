@@ -64,10 +64,36 @@ def _clean_response_text(text: str) -> str:
         "No textarea",
         "No Chrome profile",
         "No browser",
+        "历史对话",
+        "聊天记录",
+        "最近搜索",
+        "侧边栏",
+        "历史",
+        "新建对话",
+        "新对话",
     ]
+
+    # 检查是否有验证关键词
     for keyword in skip_keywords:
         if keyword in text.lower() or keyword in text:
             return "[人机验证拦截，无有效回复]"
+
+    # 过滤掉看起来像侧边栏标题列表的内容
+    # (很多短行，每行都是一个标题)
+    lines = text.split('\n')
+    short_lines = [l for l in lines if 2 < len(l.strip()) < 30]
+
+    # 如果短行比例太高，可能是侧边栏列表，只保留后半部分
+    if len(short_lines) > 5 and len(short_lines) > len(lines) * 0.4:
+        # 找到最长的几段文本，可能是真正的回复
+        long_texts = [l for l in lines if len(l.strip()) > 50]
+        if long_texts:
+            text = '\n'.join(long_texts[-3:])  # 取最后3段长文本
+
+    # 如果文本太长，尝试只取后半部分（最新回复通常在后面）
+    if len(text) > 2500:
+        text = text[-2000:]
+
     return text
 
 

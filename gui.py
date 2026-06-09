@@ -79,14 +79,36 @@ class MonitorApp:
         self.config.setdefault("doubao", {})
         self.config["doubao"]["browser"] = self.var_browser.get()
         self.config["doubao"]["chrome_profile"] = self.var_profile.get().strip()
+        # 自动判断provider类型
+        base_url = self.var_base_url.get().strip()
+        provider = self._guess_provider(base_url)
         self.config["llm_api"] = {
-            "provider": self.var_provider.get(),
+            "provider": provider,
             "model": self.var_model.get().strip(),
-            "base_url": self.var_base_url.get().strip(),
+            "base_url": base_url,
             "api_key": self.var_api_key.get().strip(),
         }
         with open(CONFIG_PATH, "w", encoding="utf-8") as f:
             yaml.dump(self.config, f, allow_unicode=True, default_flow_style=False)
+
+    def _guess_provider(self, base_url):
+        """根据base_url自动判断provider类型"""
+        if not base_url:
+            return "claude"  # 默认
+        if "ark.cn-beijing.volces.com" in base_url:
+            # 火山引擎 - 根据路径判断
+            if "/api/coding" in base_url:
+                return "qwen"  # Anthropic兼容接口
+            else:
+                return "doubao"  # OpenAI兼容接口
+        if "maas.aliyuncs.com" in base_url:
+            return "qwen"
+        if "api.openai.com" in base_url or base_url == "":
+            return "openai"
+        if "api.anthropic.com" in base_url:
+            return "claude"
+        # 默认用openai兼容模式
+        return "openai"
 
     def load_config_values(self):
         mon = self.config.get("monitor", {})
@@ -96,7 +118,6 @@ class MonitorApp:
         self.var_browser.set(db.get("browser", "Chrome"))
         self.var_profile.set(db.get("chrome_profile", ""))
         llm = self.config.get("llm_api", {})
-        self.var_provider.set(llm.get("provider", "qwen"))
         self.var_model.set(llm.get("model", ""))
         self.var_base_url.set(llm.get("base_url", ""))
         self.var_api_key.set(llm.get("api_key", ""))
@@ -104,6 +125,29 @@ class MonitorApp:
         for h in range(24):
             if h in hours:
                 self.hour_vars[h].set(True)
+
+    def test_connection(self):
+        """测试LLM连接"""
+        self.save_config()
+        self.log("[*] 正在测试连接...")
+        self.set_running(True)
+
+        def test():
+            old_stdout = sys.stdout
+            sys.stdout = self.stream_redirector
+            try:
+                from question_generator import generate_questions
+                # 用一个简单问题测试
+                config = self.config
+                result = generate_questions(config, "你好")
+                self.log(f"[OK] 连接成功！测试响应: {result[:100]}...")
+            except Exception as e:
+                self.log(f"[!] 连接失败: {e}")
+            finally:
+                sys.stdout = old_stdout
+                self.set_running(False)
+
+        threading.Thread(target=test, daemon=True).start()
 
     # ─── UI Building ──────────────────────────────────────
 
@@ -140,22 +184,20 @@ class MonitorApp:
         ttk.Label(frame, text="LLM 设置：", font=("", 9, "bold")).grid(
             row=3, column=0, columnspan=3, sticky=tk.W, pady=(PAD, 0))
 
-        # Row 4: Provider + Model
-        ttk.Label(frame, text="  接口类型：").grid(row=4, column=0, sticky=tk.W, pady=(PAD//2, 0))
-        self.var_provider = tk.StringVar()
-        provider_cb = ttk.Combobox(frame, textvariable=self.var_provider, width=12,
-                                    state="readonly", values=["qwen", "claude", "openai", "doubao"])
-        provider_cb.grid(row=4, column=1, sticky=tk.W, pady=(PAD//2, 0), padx=(0, 8))
-        ttk.Label(frame, text="模型名称：").grid(row=4, column=2, sticky=tk.W, pady=(PAD//2, 0))
+        # Row 4: Model
+        ttk.Label(frame, text="  模型名称：").grid(row=4, column=0, sticky=tk.W, pady=(PAD//2, 0))
         self.var_model = tk.StringVar()
-        ttk.Entry(frame, textvariable=self.var_model, width=20).grid(
-            row=4, column=3, sticky=tk.EW, pady=(PAD//2, 0))
+        ttk.Entry(frame, textvariable=self.var_model, width=30).grid(
+            row=4, column=1, columnspan=2, sticky=tk.W, pady=(PAD//2, 0))
 
         # Row 5: Base URL
         ttk.Label(frame, text="  API 地址：").grid(row=5, column=0, sticky=tk.W, pady=(PAD//2, 0))
         self.var_base_url = tk.StringVar()
         ttk.Entry(frame, textvariable=self.var_base_url, width=55).grid(
-            row=5, column=1, columnspan=3, sticky=tk.EW, pady=(PAD//2, 0))
+            row=5, column=1, columnspan=2, sticky=tk.EW, pady=(PAD//2, 0))
+        # 测试连接按钮
+        self.btn_test = ttk.Button(frame, text="测试连接", command=self.test_connection)
+        self.btn_test.grid(row=5, column=3, padx=(4, 0), pady=(PAD//2, 0))
 
         # Row 6: API Key
         ttk.Label(frame, text="  API Key：").grid(row=6, column=0, sticky=tk.W, pady=(PAD//2, 0))
@@ -259,6 +301,7 @@ class MonitorApp:
         self.running = running
         self.btn_now.configure(state=tk.NORMAL if not running else tk.DISABLED)
         self.btn_watch.configure(state=tk.NORMAL if not running else tk.DISABLED)
+        self.btn_test.configure(state=tk.NORMAL if not running else tk.DISABLED)
 
     def open_report_folder(self):
         monitor_dir = PROJECT_ROOT / "output" / "monitor"

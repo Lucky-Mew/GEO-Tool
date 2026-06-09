@@ -143,33 +143,92 @@ def _wait_for_captcha_solve(page, timeout_sec: int = 120):
 
 def _extract_doubao_response(page) -> str:
     """只提取豆包聊天回复内容，忽略侧边栏/历史记录。"""
-    selectors = [
-        'div[class*="message"][class*="assistant"]',
-        'div[class*="assistant"][class*="content"]',
-        'div[class*="chat"][class*="assistant"]',
-        'div[role="article"]',
-    ]
-    for sel in selectors:
-        elements = page.query_selector_all(sel)
-        if elements:
-            texts = [el.inner_text() for el in elements if el.inner_text().strip()]
-            if texts:
-                print(f"    [OK] 回复内容提取成功 ({sum(len(t) for t in texts)} chars)")
-                return "\n---\n".join(texts)
 
+    # 方法1: 用用户提供的class特征来找消息容器
     try:
-        chat_area = page.query_selector('div[class*="chat"], main, [class*="dialog"]')
-        if chat_area:
-            text = chat_area.inner_text()
-            if text.strip():
-                print(f"    [OK] 回复内容提取成功 ({len(text)} chars)")
-                return text
+        # 找包含用户提供的class特征的元素
+        selectors = [
+            # 用户提供的class特征
+            'div[class*="pl-8"][class*="pr-0"][class*="w-full"]',
+            'div[class*="max-dbx-xs"]',
+            # 标准assistant消息选择器
+            'div[data-message-author-role="assistant"]',
+            'div[class*="message"][class*="assistant"]',
+            'div[class*="assistant"][class*="content"]',
+            'article',
+        ]
+
+        for sel in selectors:
+            elements = page.query_selector_all(sel)
+            if elements and len(elements) > 0:
+                # 只取最后一个元素（最新的回复）
+                last_element = elements[-1]
+                text = last_element.inner_text().strip()
+                if text and len(text) > 20:  # 确保不是空的或太短的
+                    print(f"    [OK] 提取最新回复成功 ({len(text)} chars)")
+                    return text
     except Exception:
         pass
 
-    text = page.inner_text("body")
-    print(f"    [!] 无法精确定位回复区域，使用全页面文本 ({len(text)} chars)")
-    return text
+    # 方法2: 尝试通过JavaScript获取最新回复（排除侧边栏）
+    try:
+        text = page.evaluate("""() => {
+            // 先排除侧边栏元素
+            const sidebars = document.querySelectorAll('[class*="sidebar"], [class*="history"], [class*="nav"], [class*="menu"], [class*="list"]');
+            sidebars.forEach(el => {
+                try { el.style.display = 'none'; } catch(e) {}
+            });
+
+            // 再找所有消息元素
+            const allElements = document.querySelectorAll('div, article');
+            let lastAssistantText = '';
+
+            for (let i = allElements.length - 1; i >= 0; i--) {
+                const el = allElements[i];
+                const text = el.innerText || '';
+                const className = el.className || '';
+
+                // 跳过已隐藏的和太短的
+                if (!text || text.length < 30) continue;
+
+                // 找看起来像assistant回复的元素
+                if (className.includes('assistant') || className.includes('message') ||
+                    className.includes('pl-8') || className.includes('pr-0')) {
+                    // 恢复侧边栏
+                    sidebars.forEach(el => {
+                        try { el.style.display = ''; } catch(e) {}
+                    });
+                    return text;
+                }
+
+                // 记录最后一段较长的文本
+                if (text.length > 100 && !lastAssistantText) {
+                    lastAssistantText = text;
+                }
+            }
+
+            // 恢复侧边栏
+            sidebars.forEach(el => {
+                try { el.style.display = ''; } catch(e) {}
+            });
+
+            return lastAssistantText;
+        }""")
+        if text and len(text) > 30:
+            print(f"    [OK] JS提取回复成功 ({len(text)} chars)")
+            return text
+    except Exception:
+        pass
+
+    # 方法3: 获取body文本，但做智能过滤
+    full_text = page.inner_text("body")
+
+    # 只取文本的后一部分
+    if len(full_text) > 2500:
+        full_text = full_text[-2000:]
+
+    print(f"    [!] 无法精确定位回复区域，使用过滤后的文本 ({len(full_text)} chars)")
+    return full_text
 
 
 def _ask_one_question(page, url: str, question: str, reply_wait: int) -> str:
