@@ -12,7 +12,7 @@ def _build_prompt(user_question: str) -> str:
         f"请生成 2 个语义相似但表达方式不同的问题。\n\n"
         f"要求：\n"
         f"1. 保持相同的核心意图（用户想找什么/问什么）\n"
-        f"2. 2个问题之间差异要大一些，不要只是改一两个词\n"
+        f"2. 2个问题之间差异要大一些，不要只是换一两个词\n"
         f"3. 简洁直接，像真实用户在搜索引擎里输入的\n"
         f"4. 不要用社交平台口语（如'姐妹们'、'大家觉得'、'求推荐'等）\n"
         f"5. 可以尝试不同的提问角度：\n"
@@ -30,7 +30,7 @@ def _parse_response(text: str) -> list[str]:
     lines = [line.strip() for line in text.strip().split("\n") if line.strip()]
     cleaned = []
     for line in lines:
-        line = re.sub(r"^(问题)?\d*[\.、:：]\s*", "", line)
+        line = re.sub(r'^(问题)?\d*[\.、:：]\s*', '', line)
         if line:
             cleaned.append(line)
     return cleaned[:2]

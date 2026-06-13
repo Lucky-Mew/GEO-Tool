@@ -55,7 +55,10 @@
       "Bash(pip install *)",
       "Bash(pip show *)",
       "Bash(where pyinstaller *)",
-      "Bash(taskkill /F /IM \"GEO品牌监测.exe\")"
+      "Bash(taskkill /F /IM \"GEO品牌监测.exe\")",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git push *)"
     ]
   },
   "statusLine": {

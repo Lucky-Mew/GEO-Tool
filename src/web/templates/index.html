@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GEO 品牌监测仪表盘</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>📊 GEO 品牌监测仪表盘</h1>
+            <p class="subtitle">实时查看品牌在 AI 搜索中的表现</p>
+            <p id="lastUpdated" class="last-updated"></p>
+        </header>
+
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-value" id="totalDays">--</div>
+                <div class="stat-label">监测天数</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="mentionRate">--</div>
+                <div class="stat-label">平均提及率</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="totalQuestions">--</div>
+                <div class="stat-label">总问题数</div>
+            </div>
+        </div>
+
+        <section class="chart-section">
+            <h2>📈 品牌提及趋势</h2>
+            <div class="chart-container">
+                <canvas id="trendChart"></canvas>
+            </div>
+        </section>
+
+        <section class="data-section">
+            <h2>📅 历史数据</h2>
+            <div id="dateList" class="date-list"></div>
+        </section>
+
+        <section class="detail-section" id="detailSection" style="display: none;">
+            <h2>🔍 详情: <span id="detailDate"></span></h2>
+            <div id="detailContent"></div>
+        </section>
+    </div>
+
+    <!-- ECharts -->
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+    <script src="/static/js/main.js"></script>
+</body>
+</html>

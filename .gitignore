@@ -1,6 +1,7 @@
-# Claude Code 调试输出
+# Claude Code
 .claude/debug_output.txt
 .claude/stdin_*.txt
+.claude/memory/
 
 # OS files
 .DS_Store
@@ -24,8 +25,16 @@ build/
 dist/
 *.spec
 
-# Generated output
+# Generated output & data
 output/
+data/
+*.db
+*.sqlite
+
+# Temp files
+=3.0.0
+migrate_data.py
+migrate_project.py
 
 # Runtime log
 monitor.log

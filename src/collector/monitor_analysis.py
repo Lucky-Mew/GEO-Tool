@@ -105,41 +105,20 @@ def analyze_monitor_results(config: dict, question: str, brand: str,
     results: [{
         "hour": 14,
         "questions": ["问题1", "问题2", "问题3"],
-        "responses": [{"answer": "...", "references": [...]}, ...]
+        "responses": ["回复1全文", "回复2全文", "回复3全文"]
     }, ...]
     """
-
-    # 收集所有参考资料用于报告
-    all_references = []
 
     # 清理并构建回复摘要
     responses_summary = ""
     for r in results:
         responses_summary += f"\n=== {r['hour']}:00 的豆包回复 ===\n"
-        for i, (q, resp_data) in enumerate(zip(r["questions"], r["responses"]), 1):
-            # 处理新的数据结构
-            if isinstance(resp_data, dict):
-                resp_text = resp_data.get("answer", "")
-                references = resp_data.get("references", [])
-            else:
-                resp_text = resp_data
-                references = []
-
-            cleaned = _clean_response_text(resp_text)
+        for i, (q, resp) in enumerate(zip(r["questions"], r["responses"])):
+            cleaned = _clean_response_text(resp)
             # 截取前1200字
             resp_preview = cleaned[:1200] + ("..." if len(cleaned) > 1200 else "")
-            responses_summary += f"  问题{i}: {q}\n  豆包回复: {resp_preview}\n\n"
+            responses_summary += f"  问题{i+1}: {q}\n  豆包回复: {resp_preview}\n\n"
 
-            # 收集参考资料
-            if references:
-                all_references.append({
-                    "hour": r["hour"],
-                    "question_idx": i,
-                    "question": q,
-                    "references": references
-                })
-
-    # 生成 LLM 分析报告
     prompt = (
         f"用户提问：「{question}」\n"
         f"监测品牌：「{brand}」\n\n"
@@ -170,23 +149,4 @@ def analyze_monitor_results(config: dict, question: str, brand: str,
         f"用2-3句话总结监测品牌在当前提问下的整体表现。"
     )
 
-    llm_analysis = _call_llm(config, prompt)
-
-    # 在 LLM 分析后添加参考资料部分
-    if all_references:
-        references_section = "\n\n---\n\n## 参考资料\n\n"
-        for ref_data in all_references:
-            references_section += f"### {ref_data['hour']}:00 - 问题{ref_data['question_idx']}\n"
-            references_section += f"**问题**: {ref_data['question']}\n\n"
-            for i, ref in enumerate(ref_data["references"], 1):
-                title = ref.get("title", "无标题")
-                url = ref.get("url", "")
-                site = ref.get("site", "")
-                if site:
-                    references_section += f"{i}. [{title}]({url}) ({site})\n"
-                else:
-                    references_section += f"{i}. [{title}]({url})\n"
-            references_section += "\n"
-        llm_analysis += references_section
-
-    return llm_analysis
+    return _call_llm(config, prompt)

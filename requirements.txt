@@ -3,3 +3,4 @@ playwright>=1.40.0
 anthropic>=0.39.0
 openai>=1.30.0
 beautifulsoup4>=4.12.0
+flask>=3.0.0
