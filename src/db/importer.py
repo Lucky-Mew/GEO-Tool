@@ -65,7 +65,12 @@ def import_json_to_db(json_path: Path, brand: str, question: str) -> bool:
         hour = data.get('hour', 0)
         timestamp = data.get('timestamp', datetime.now().strftime('%Y-%m-%d %H:%M'))
         questions = data.get('questions', [])
-        responses = data.get('responses', [])
+        responses = []
+        for resp in data.get('responses', []):
+            if isinstance(resp, dict):
+                responses.append(resp.get('answer') or resp.get('content') or json.dumps(resp, ensure_ascii=False))
+            else:
+                responses.append(resp or "")
 
         # 插入任务
         task_id = models.insert_monitor_task(date_str, hour, timestamp, brand, question)

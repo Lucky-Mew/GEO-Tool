@@ -453,7 +453,10 @@ class MonitorApp:
 
         # Step 2: Ask Doubao
         self.log("[2] 向豆包提问中...")
-        responses = run_doubao_queries(config, questions)
+        response_dicts = run_doubao_queries(config, questions)
+        # 分离回答文本和参考资料
+        responses = [r["answer"] for r in response_dicts]
+        citations_list = [r["citations"] for r in response_dicts]
 
         # Save raw data
         result = {
@@ -461,14 +464,37 @@ class MonitorApp:
             "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M"),
             "questions": questions,
             "responses": responses,
+            "citations": citations_list,
         }
         date_str = datetime.now().strftime("%Y%m%d")
+        time_str = datetime.now().strftime("%H%M")
         save_dir = get_monitor_data_dir() / date_str
         save_dir.mkdir(parents=True, exist_ok=True)
         json_path = save_dir / f"timepoint_{hour:02d}.json"
         with open(json_path, "w", encoding="utf-8") as f:
             json.dump(result, f, ensure_ascii=False, indent=2)
         self.log(f"    数据已保存: timepoint_{hour:02d}.json")
+
+        # 为每个问题单独保存文档
+        for i, (q, resp, citations) in enumerate(zip(questions, responses, citations_list), 1):
+            # 安全的文件名
+            safe_q = "".join(c for c in q if c not in r'\/:*?"<>|')[:30]
+            question_file = save_dir / f"问题{i}_{safe_q}_{time_str}.md"
+            with open(question_file, "w", encoding="utf-8") as f:
+                f.write(f"# 问题 {i}: {q}\n\n")
+                f.write(f"**提问时间**: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
+                f.write("---\n\n")
+                f.write("## 豆包回答\n\n")
+                f.write(f"{resp}\n\n")
+                f.write("---\n\n")
+                f.write(f"## 参考资料（共 {len(citations)} 条）\n\n")
+                if citations:
+                    for j, cite in enumerate(citations, 1):
+                        f.write(f"[{j}] {cite['title']}\n")
+                        f.write(f"    {cite['url']}\n\n")
+                else:
+                    f.write("(无参考资料)\n")
+            self.log(f"    问题{i}文档已保存")
 
         # Step 3: Save to database
         self.log("[3] 保存到数据库...")

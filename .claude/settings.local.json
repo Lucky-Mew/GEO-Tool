@@ -58,7 +58,9 @@
       "Bash(taskkill /F /IM \"GEO品牌监测.exe\")",
       "Bash(git add *)",
       "Bash(git commit *)",
-      "Bash(git push *)"
+      "Bash(git push *)",
+      "Bash(PYTHONIOENCODING=utf-8 python *)",
+      "WebFetch(domain:app.aibase.com)"
     ]
   },
   "statusLine": {

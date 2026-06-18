@@ -34,13 +34,16 @@ async function loadSummary() {
         document.getElementById('lastUpdated').textContent =
             `最后更新: ${data.last_updated}`;
 
+        const summaries = data.summaries || [];
+        const dates = summaries.map(s => s.date_str);
+
         // 更新统计卡片
-        document.getElementById('totalDays').textContent = data.available_dates.length;
+        document.getElementById('totalDays').textContent = dates.length;
 
         // 计算平均提及率
         let totalQuestions = 0;
         let totalMentionCount = 0;
-        data.summaries.forEach(s => {
+        summaries.forEach(s => {
             totalQuestions += s.total_questions || 0;
             totalMentionCount += s.brand_mentioned_count || 0;
         });
@@ -50,7 +53,7 @@ async function loadSummary() {
         document.getElementById('totalQuestions').textContent = totalQuestions;
 
         // 渲染日期列表
-        renderDateList(data.available_dates, data.summaries);
+        renderDateList(dates, summaries);
     } catch (error) {
         console.error('加载汇总数据失败:', error);
     }

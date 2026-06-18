@@ -86,12 +86,28 @@ def insert_monitor_task(date_str: str, hour: int, timestamp: str, brand: str, qu
     cursor = conn.cursor()
 
     try:
-        cursor.execute('''
-            INSERT OR REPLACE INTO monitor_tasks (date_str, hour, timestamp, brand, question)
-            VALUES (?, ?, ?, ?, ?)
-        ''', (date_str, hour, timestamp, brand, question))
+        cursor.execute('SELECT id FROM monitor_tasks WHERE date_str = ? AND hour = ?', (date_str, hour))
+        existing = cursor.fetchone()
 
-        task_id = cursor.lastrowid
+        if existing:
+            task_id = existing['id']
+            cursor.execute('''
+                DELETE FROM brand_mentions
+                WHERE question_id IN (SELECT id FROM questions WHERE task_id = ?)
+            ''', (task_id,))
+            cursor.execute('DELETE FROM questions WHERE task_id = ?', (task_id,))
+            cursor.execute('''
+                UPDATE monitor_tasks
+                SET timestamp = ?, brand = ?, question = ?
+                WHERE id = ?
+            ''', (timestamp, brand, question, task_id))
+        else:
+            cursor.execute('''
+                INSERT INTO monitor_tasks (date_str, hour, timestamp, brand, question)
+                VALUES (?, ?, ?, ?, ?)
+            ''', (date_str, hour, timestamp, brand, question))
+            task_id = cursor.lastrowid
+
         conn.commit()
         return task_id
     except Exception as e:
@@ -201,39 +217,77 @@ def get_questions_by_task(task_id: int) -> List[Dict]:
         conn.close()
 
 
+def _parse_summary_data(summary_data):
+    """解析摘要 JSON"""
+    if not summary_data:
+        return {}
+    try:
+        return json.loads(summary_data)
+    except json.JSONDecodeError:
+        return {}
+
+
+def _build_daily_summary(row, summary_data=None):
+    """从实时统计行构建每日摘要"""
+    data = dict(row)
+    total_questions = data.get('total_questions') or 0
+    brand_mentioned_count = data.get('brand_mentioned_count') or 0
+    data['mention_rate'] = round(brand_mentioned_count / total_questions, 4) if total_questions else 0
+    data['summary_data'] = _parse_summary_data(summary_data)
+    return data
+
+
 def get_daily_summary(date_str: str) -> Optional[Dict]:
-    """获取某天的摘要"""
+    """获取某天的实时摘要"""
     conn = get_connection()
     cursor = conn.cursor()
 
     try:
-        cursor.execute('SELECT * FROM daily_summaries WHERE date_str = ?', (date_str,))
+        cursor.execute('''
+            SELECT m.date_str,
+                   MAX(m.brand) as brand,
+                   COUNT(DISTINCT m.id) as task_count,
+                   COUNT(DISTINCT q.id) as total_questions,
+                   COUNT(DISTINCT CASE WHEN b.id IS NOT NULL THEN q.id END) as brand_mentioned_count
+            FROM monitor_tasks m
+            LEFT JOIN questions q ON m.id = q.task_id
+            LEFT JOIN brand_mentions b ON q.id = b.question_id AND b.brand_name = m.brand
+            WHERE m.date_str = ?
+            GROUP BY m.date_str
+        ''', (date_str,))
         row = cursor.fetchone()
-        if row:
-            data = dict(row)
-            if data['summary_data']:
-                data['summary_data'] = json.loads(data['summary_data'])
-            return data
-        return None
+        if not row:
+            return None
+
+        cursor.execute('SELECT summary_data FROM daily_summaries WHERE date_str = ?', (date_str,))
+        summary_row = cursor.fetchone()
+        summary_data = summary_row['summary_data'] if summary_row else None
+        return _build_daily_summary(row, summary_data)
     finally:
         conn.close()
 
 
 def get_all_summaries() -> List[Dict]:
-    """获取所有日期的摘要"""
+    """获取所有日期的实时摘要"""
     conn = get_connection()
     cursor = conn.cursor()
 
     try:
-        cursor.execute('SELECT * FROM daily_summaries ORDER BY date_str DESC')
-        rows = cursor.fetchall()
-        results = []
-        for row in rows:
-            data = dict(row)
-            if data['summary_data']:
-                data['summary_data'] = json.loads(data['summary_data'])
-            results.append(data)
-        return results
+        cursor.execute('''
+            SELECT m.date_str,
+                   MAX(m.brand) as brand,
+                   COUNT(DISTINCT m.id) as task_count,
+                   COUNT(DISTINCT q.id) as total_questions,
+                   COUNT(DISTINCT CASE WHEN b.id IS NOT NULL THEN q.id END) as brand_mentioned_count,
+                   ds.summary_data
+            FROM monitor_tasks m
+            LEFT JOIN questions q ON m.id = q.task_id
+            LEFT JOIN brand_mentions b ON q.id = b.question_id AND b.brand_name = m.brand
+            LEFT JOIN daily_summaries ds ON m.date_str = ds.date_str
+            GROUP BY m.date_str
+            ORDER BY m.date_str DESC
+        ''')
+        return [_build_daily_summary(row, row['summary_data']) for row in cursor.fetchall()]
     finally:
         conn.close()
 
@@ -245,41 +299,29 @@ def get_brand_mention_stats(days: int = 30) -> List[Dict]:
 
     try:
         # date_str 格式是 YYYYMMDD，不能用 SQLite date() 函数比较
-        # 直接查所有数据，在 Python 端过滤
+        from datetime import timedelta
+        cutoff = (datetime.now() - timedelta(days=days)).strftime('%Y%m%d')
         cursor.execute('''
-            SELECT m.date_str, m.brand,
+            SELECT m.date_str,
+                   MAX(m.brand) as brand,
                    COUNT(DISTINCT m.id) as task_count,
-                   COUNT(DISTINCT q.id) as question_count
+                   COUNT(DISTINCT q.id) as question_count,
+                   COUNT(DISTINCT CASE WHEN b.id IS NOT NULL THEN q.id END) as mention_count
             FROM monitor_tasks m
             LEFT JOIN questions q ON m.id = q.task_id
+            LEFT JOIN brand_mentions b ON q.id = b.question_id AND b.brand_name = m.brand
+            WHERE m.date_str >= ?
             GROUP BY m.date_str
             ORDER BY m.date_str
-        ''')
-        task_rows = cursor.fetchall()
+        ''', (cutoff,))
 
         results = []
-        for row in task_rows:
-            r = dict(row)
-            date_str = r['date_str']
-            brand = r['brand']
-
-            # 单独查询该日期该品牌的提及次数
-            cursor.execute('''
-                SELECT COUNT(DISTINCT q.id) as mention_count
-                FROM questions q
-                JOIN monitor_tasks m ON q.task_id = m.id
-                JOIN brand_mentions b ON q.id = b.question_id
-                WHERE m.date_str = ? AND b.brand_name = ?
-            ''', (date_str, brand))
-            mention_row = cursor.fetchone()
-            r['mention_count'] = dict(mention_row)['mention_count'] if mention_row else 0
-            results.append(r)
-
-        # 过滤最近 N 天
-        from datetime import datetime, timedelta
-        cutoff = (datetime.now() - timedelta(days=days)).strftime('%Y%m%d')
-        results = [r for r in results if r['date_str'] >= cutoff]
-
+        for row in cursor.fetchall():
+            data = dict(row)
+            question_count = data.get('question_count') or 0
+            mention_count = data.get('mention_count') or 0
+            data['mention_rate'] = round(mention_count / question_count, 4) if question_count else 0
+            results.append(data)
         return results
     finally:
         conn.close()
