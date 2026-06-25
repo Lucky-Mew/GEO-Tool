@@ -4,51 +4,229 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>GEO 品牌监测仪表盘</title>
-    <link rel="stylesheet" href="/static/css/style.css">
+    <link rel="stylesheet" href="/static/css/style.css?v=2">
 </head>
 <body>
     <div class="container">
         <header>
             <h1>📊 GEO 品牌监测仪表盘</h1>
             <p class="subtitle">实时查看品牌在 AI 搜索中的表现</p>
-            <p id="lastUpdated" class="last-updated"></p>
         </header>
 
-        <div class="stats-grid">
-            <div class="stat-card">
-                <div class="stat-value" id="totalDays">--</div>
-                <div class="stat-label">监测天数</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-value" id="mentionRate">--</div>
-                <div class="stat-label">平均提及率</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-value" id="totalQuestions">--</div>
-                <div class="stat-label">总问题数</div>
+        <div class="main-content">
+            <!-- 左侧项目列表 -->
+            <aside class="sidebar">
+                <div class="sidebar-header">
+                    <h3>📋 项目列表</h3>
+                    <button class="btn-small btn-primary" onclick="showCreateProjectDialog()">+ 新建项目</button>
+                </div>
+                <div id="projectList" class="project-list"></div>
+            </aside>
+
+            <!-- 右侧内容区域 -->
+            <div class="content-area">
+                <!-- 无项目选择时的提示 -->
+                <div id="noProjectSelected" class="empty-project-state">
+                    <div class="empty-project-icon">🏗️</div>
+                    <h3>请选择或创建一个项目</h3>
+                    <p>每个项目独立管理一个品牌的监测数据</p>
+                </div>
+
+                <!-- 项目内容区域（默认隐藏） -->
+                <div id="projectContent" style="display: none;">
+                    <div class="project-header">
+                        <h2 id="currentProjectName">项目名称</h2>
+                        <p id="currentProjectDesc" class="project-desc"></p>
+                    </div>
+
+                    <nav class="main-nav">
+                        <button class="nav-btn active" onclick="showView('control')">▶️ 任务控制</button>
+                        <button class="nav-btn" onclick="showView('dashboard')">📈 仪表盘</button>
+                        <button class="nav-btn" onclick="showView('files')">📁 文件浏览</button>
+                    </nav>
+
+                    <!-- 任务控制视图 -->
+                    <div id="controlView" class="view active">
+                        <!-- 任务列表区域 -->
+                        <section class="data-section">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                                <h3>📝 监测任务</h3>
+                                <button class="report-btn" onclick="showAddTaskDialog()">+ 添加任务</button>
+                            </div>
+                            <div class="project-brand-info">
+                                <span>监测品牌:</span>
+                                <strong id="projectBrandName" style="color: #667eea;">品牌名</strong>
+                                <span style="color: #999; font-size: 0.85em;">(不可修改)</span>
+                            </div>
+                            <div id="taskManageList" class="task-list"></div>
+                        </section>
+
+                        <!-- 立即执行区域 -->
+                        <section class="data-section">
+                            <h3>▶️ 立即执行</h3>
+                            <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 10px;">
+                                <button id="startBtn" class="report-btn" onclick="startMonitor()" style="padding: 10px 24px; font-size: 1em;">开始执行</button>
+                                <span id="statusText" style="font-size: 0.95em;">状态: 空闲</span>
+                            </div>
+
+                            <h4>📜 执行日志</h4>
+                            <div id="logContainer" class="log-container">
+                                <div id="logContent">等待执行...</div>
+                            </div>
+                        </section>
+
+                        <!-- 定时监测区域 -->
+                        <section class="data-section">
+                            <h3>⏰ 定时监测</h3>
+
+                            <div id="schedulerStatus" style="margin-bottom: 10px; padding: 8px 10px; background: #f0f9ff; border-radius: 5px;">
+                                <span id="schedulerStatusText">加载调度器状态...</span>
+                            </div>
+
+                            <p style="margin-bottom: 10px; color: #666; font-size: 0.9em;">选择每天要执行监测的时间（小时）</p>
+                            <div id="hourSelector" class="hour-selector"></div>
+                            <div style="margin-top: 12px;">
+                                <button class="report-btn" onclick="saveSchedule()">💾 保存定时设置</button>
+                            </div>
+                            <p id="scheduleNote" style="margin-top: 8px; color: #059669; font-size: 0.85em;">定时监测已启用，保持Web服务运行即可自动执行</p>
+
+                            <div id="scheduledJobs" style="margin-top: 12px;">
+                                <h4 style="margin-bottom: 8px;">📅 即将执行的任务</h4>
+                                <div id="scheduledJobsList" style="font-size: 0.85em; color: #666;">加载中...</div>
+                            </div>
+                        </section>
+                    </div>
+
+                    <!-- 仪表盘视图 -->
+                    <div id="dashboardView" class="view">
+                        <div class="stats-grid">
+                            <div class="stat-card">
+                                <div class="stat-value" id="totalDays">--</div>
+                                <div class="stat-label">监测天数</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-value" id="mentionRate">--</div>
+                                <div class="stat-label">平均提及率</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-value" id="totalQuestions">--</div>
+                                <div class="stat-label">总问题数</div>
+                            </div>
+                        </div>
+
+                        <div class="charts-row">
+                            <section class="chart-section">
+                                <h3>📈 品牌提及趋势</h3>
+                                <div class="chart-container">
+                                    <canvas id="trendChart"></canvas>
+                                </div>
+                            </section>
+
+                            <section class="chart-section">
+                                <h3>📍 品牌出现位置分布</h3>
+                                <div class="chart-container">
+                                    <canvas id="positionChart"></canvas>
+                                </div>
+                            </section>
+                        </div>
+
+                        <section class="data-section">
+                            <h3>📅 历史数据</h3>
+                            <div id="dateList" class="date-list"></div>
+                        </section>
+
+                        <section class="detail-section" id="detailSection" style="display: none;">
+                            <h3>🔍 详情: <span id="detailDate"></span></h3>
+                            <button class="back-btn" onclick="hideDetail()">← 返回</button>
+                            <div id="detailContent"></div>
+                        </section>
+                    </div>
+
+                    <!-- 文件浏览视图 -->
+                    <div id="filesView" class="view">
+                        <section class="data-section">
+                            <h3>📅 选择日期</h3>
+                            <div id="fileDateList" class="date-list"></div>
+                        </section>
+
+                        <section class="data-section" id="taskSection" style="display: none;">
+                            <h3>📂 任务列表: <span id="taskDate"></span></h3>
+                            <button class="back-btn" onclick="backToDateList()">← 返回日期列表</button>
+                            <div id="taskList" class="task-list"></div>
+                        </section>
+
+                        <section class="data-section" id="taskDetailSection" style="display: none;">
+                            <h3>📋 任务详情: <span id="taskTitle"></span></h3>
+                            <button class="back-btn" onclick="backToTaskList()">← 返回任务列表</button>
+
+                            <div id="reportSection" class="report-section" style="display: none;">
+                                <h4>📑 分析报告</h4>
+                                <div id="reportContent" class="markdown-body"></div>
+                            </div>
+
+                            <div id="answersSection" class="answers-section">
+                                <h4>💬 豆包回答</h4>
+                                <div id="answersList"></div>
+                            </div>
+                        </section>
+                    </div>
+                </div>
             </div>
         </div>
+    </div>
 
-        <section class="chart-section">
-            <h2>📈 品牌提及趋势</h2>
-            <div class="chart-container">
-                <canvas id="trendChart"></canvas>
+    <!-- 新建项目弹窗 -->
+    <div id="createProjectModal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>创建新项目</h3>
+                <button class="modal-close" onclick="closeCreateProjectDialog()">&times;</button>
             </div>
-        </section>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>项目名称（品牌名）:</label>
+                    <input type="text" id="newProjectName" class="form-input" placeholder="例如: 完形康躰">
+                </div>
+                <div class="form-group">
+                    <label>描述（可选）:</label>
+                    <input type="text" id="newProjectDesc" class="form-input" placeholder="项目描述">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-cancel" onclick="closeCreateProjectDialog()">取消</button>
+                <button class="btn-save" onclick="createProject()">创建</button>
+            </div>
+        </div>
+    </div>
 
-        <section class="data-section">
-            <h2>📅 历史数据</h2>
-            <div id="dateList" class="date-list"></div>
-        </section>
-
-        <section class="detail-section" id="detailSection" style="display: none;">
-            <h2>🔍 详情: <span id="detailDate"></span></h2>
-            <div id="detailContent"></div>
-        </section>
+    <!-- 任务弹窗（添加/编辑） -->
+    <div id="taskModal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="taskModalTitle">添加监测任务</h3>
+                <button class="modal-close" onclick="closeTaskModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>问题:</label>
+                    <input type="text" id="taskQuestion" class="form-input" placeholder="例如: 康躰哪家好">
+                </div>
+                <div class="form-group">
+                    <label>监测品牌（多个用分号;分隔）:</label>
+                    <input type="text" id="taskBrands" class="form-input" placeholder="例如: 完形;完形康躰">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-cancel" onclick="closeTaskModal()">取消</button>
+                <button class="btn-save" onclick="saveTaskModal()">保存</button>
+            </div>
+        </div>
     </div>
 
     <!-- ECharts -->
     <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+    <!-- Marked.js for Markdown rendering -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <script src="/static/js/main.js"></script>
 </body>
 </html>
