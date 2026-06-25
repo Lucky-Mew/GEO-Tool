@@ -2,6 +2,7 @@
 .claude/debug_output.txt
 .claude/stdin_*.txt
 .claude/memory/
+.claude/settings.local.json
 
 # OS files
 .DS_Store
@@ -35,6 +36,16 @@ data/
 =3.0.0
 migrate_data.py
 migrate_project.py
+check_*.py
+clear_db.py
+create_project_simple.py
+debug_config.py
+fix_*.py
+rebuild_*.py
+reimport_*.py
+test_*.py
+data_backup_*/
+migrations/
 
 # Runtime log
 monitor.log
