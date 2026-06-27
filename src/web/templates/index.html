@@ -9,8 +9,13 @@
 <body>
     <div class="container">
         <header>
-            <h1>📊 GEO 品牌监测仪表盘</h1>
-            <p class="subtitle">实时查看品牌在 AI 搜索中的表现</p>
+            <div class="header-left">
+                <h1>📊 GEO 品牌监测仪表盘</h1>
+                <p class="subtitle">实时查看品牌在 AI 搜索中的表现</p>
+            </div>
+            <div class="header-right">
+                <button class="settings-btn" onclick="openSettingsModal()" title="设置">⚙️</button>
+            </div>
         </header>
 
         <div class="main-content">
@@ -219,6 +224,88 @@
             <div class="modal-footer">
                 <button class="btn-cancel" onclick="closeTaskModal()">取消</button>
                 <button class="btn-save" onclick="saveTaskModal()">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 全局设置弹窗 -->
+    <div id="settingsModal" class="modal" style="display: none;">
+        <div class="modal-content modal-large">
+            <div class="modal-header">
+                <h3>⚙️ 全局设置</h3>
+                <button class="modal-close" onclick="closeSettingsModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <!-- 队列状态显示 -->
+                <div class="queue-status-section">
+                    <h4>📋 任务队列状态</h4>
+                    <div class="queue-status">
+                        <span class="queue-count">队列中: <strong id="queueCount">0</strong> / <strong>10</strong></span>
+                        <span class="queue-current" id="queueCurrent">当前空闲</span>
+                    </div>
+                    <div id="queueList" class="queue-list" style="display: none;"></div>
+                </div>
+
+                <!-- CAPTCHA 状态和控制 -->
+                <div class="queue-status-section">
+                    <h4>🛡️ 任务控制</h4>
+                    <div id="captchaAlert" class="captcha-alert" style="display: none;">
+                        <div class="captcha-alert-title">⚠️ 检测到人机验证</div>
+                        <div class="captcha-alert-text">请在浏览器中完成验证，完成后点击下方按钮继续</div>
+                        <button class="btn-save" onclick="continueAfterCaptcha()">✅ 验证完成，继续执行</button>
+                    </div>
+                    <div id="pauseControls" style="margin-top: 10px;">
+                        <button class="btn-cancel" id="pauseBtn" onclick="pauseTask()">⏸️ 暂停任务</button>
+                        <button class="btn-save" id="continueBtn" onclick="continueTask()" style="display: none;">▶️ 继续任务</button>
+                    </div>
+                </div>
+
+                <hr class="settings-divider">
+
+                <!-- 浏览器设置 -->
+                <div class="settings-section">
+                    <h4>🖥️ 浏览器设置</h4>
+                    <div class="form-row">
+                        <div class="form-group" style="flex: 0 0 120px;">
+                            <label>浏览器:</label>
+                            <select id="settingsBrowser" class="form-input">
+                                <option value="Chrome">Chrome</option>
+                                <option value="Edge">Edge</option>
+                            </select>
+                        </div>
+                        <div class="form-group" style="flex: 1;">
+                            <label>Chrome Profile 路径:</label>
+                            <div class="profile-input-row">
+                                <input type="text" id="settingsProfile" class="form-input" placeholder="浏览器Profile目录路径">
+                                <button class="btn-small btn-secondary" onclick="detectProfile()">自动检测</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <hr class="settings-divider">
+
+                <!-- LLM设置 -->
+                <div class="settings-section">
+                    <h4>🤖 LLM 设置</h4>
+                    <div class="form-group">
+                        <label>模型名称:</label>
+                        <input type="text" id="settingsModel" class="form-input" placeholder="例如: qwen3.6-flash">
+                    </div>
+                    <div class="form-group">
+                        <label>API 地址:</label>
+                        <input type="text" id="settingsBaseUrl" class="form-input" placeholder="例如: https://token-plan.cn-beijing.maas.aliyuncs.com/apps/anthropic">
+                    </div>
+                    <div class="form-group">
+                        <label>API Key:</label>
+                        <input type="password" id="settingsApiKey" class="form-input" placeholder="输入API密钥">
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <span id="settingsStatus" style="color: #666; margin-right: auto;"></span>
+                <button class="btn-cancel" onclick="closeSettingsModal()">取消</button>
+                <button class="btn-save" onclick="saveSettings()">保存设置</button>
             </div>
         </div>
     </div>

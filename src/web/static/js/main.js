@@ -105,6 +105,7 @@ async function createProject() {
         if (data.success) {
             closeCreateProjectDialog();
             loadProjects();
+            selectProject(data.project_id, name, desc);
         } else {
             alert('创建失败: ' + data.error);
         }
@@ -907,4 +908,218 @@ function escapeHtml(text) {
 document.addEventListener('click', (e) => {
     if (e.target.id === 'taskModal') closeTaskModal();
     if (e.target.id === 'createProjectModal') closeCreateProjectDialog();
+    if (e.target.id === 'settingsModal') closeSettingsModal();
 });
+
+// ========== 全局设置弹窗 ==========
+
+let queuePollingInterval = null;
+
+function openSettingsModal() {
+    document.getElementById('settingsModal').style.display = 'flex';
+    loadSettings();
+    loadQueueStatus();
+
+    // 开始轮询队列状态
+    if (queuePollingInterval) clearInterval(queuePollingInterval);
+    queuePollingInterval = setInterval(loadQueueStatus, 3000);
+}
+
+function closeSettingsModal() {
+    document.getElementById('settingsModal').style.display = 'none';
+    if (queuePollingInterval) {
+        clearInterval(queuePollingInterval);
+        queuePollingInterval = null;
+    }
+}
+
+async function loadSettings() {
+    try {
+        const response = await fetch('/api/global-settings');
+        const data = await response.json();
+
+        if (data.success) {
+            const s = data.settings;
+            document.getElementById('settingsBrowser').value = s.browser || 'Chrome';
+            document.getElementById('settingsProfile').value = s.chrome_profile || '';
+            document.getElementById('settingsModel').value = s.model || '';
+            document.getElementById('settingsBaseUrl').value = s.base_url || '';
+            document.getElementById('settingsApiKey').value = s.api_key || '';
+        }
+    } catch (error) {
+        console.error('加载设置失败:', error);
+    }
+}
+
+async function saveSettings() {
+    const statusEl = document.getElementById('settingsStatus');
+    statusEl.textContent = '保存中...';
+    statusEl.style.color = '#667eea';
+
+    try {
+        const response = await fetch('/api/global-settings', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                browser: document.getElementById('settingsBrowser').value,
+                chrome_profile: document.getElementById('settingsProfile').value,
+                model: document.getElementById('settingsModel').value,
+                base_url: document.getElementById('settingsBaseUrl').value,
+                api_key: document.getElementById('settingsApiKey').value
+            })
+        });
+        const data = await response.json();
+
+        if (data.success) {
+            statusEl.textContent = '✓ 保存成功！';
+            statusEl.style.color = '#059669';
+            setTimeout(() => {
+                statusEl.textContent = '';
+            }, 2000);
+        } else {
+            statusEl.textContent = '✗ 保存失败: ' + data.error;
+            statusEl.style.color = '#dc2626';
+        }
+    } catch (error) {
+        console.error('保存设置失败:', error);
+        statusEl.textContent = '✗ 保存失败';
+        statusEl.style.color = '#dc2626';
+    }
+}
+
+async function detectProfile() {
+    const browser = document.getElementById('settingsBrowser').value;
+    const statusEl = document.getElementById('settingsStatus');
+
+    statusEl.textContent = '检测中...';
+    statusEl.style.color = '#667eea';
+
+    try {
+        const response = await fetch('/api/detect-profile', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({browser})
+        });
+        const data = await response.json();
+
+        if (data.success) {
+            document.getElementById('settingsProfile').value = data.profile;
+            if (data.browser !== browser) {
+                document.getElementById('settingsBrowser').value = data.browser;
+            }
+            statusEl.textContent = '✓ 检测成功！';
+            statusEl.style.color = '#059669';
+            setTimeout(() => {
+                statusEl.textContent = '';
+            }, 2000);
+        } else {
+            statusEl.textContent = '✗ ' + data.error;
+            statusEl.style.color = '#dc2626';
+        }
+    } catch (error) {
+        console.error('检测失败:', error);
+        statusEl.textContent = '✗ 检测失败';
+        statusEl.style.color = '#dc2626';
+    }
+}
+
+// ========== 队列状态显示 ==========
+
+async function loadQueueStatus() {
+    try {
+        const response = await fetch('/api/queue/status');
+        const data = await response.json();
+
+        if (data.success) {
+            // 更新队列计数
+            document.getElementById('queueCount').textContent = data.current_size;
+
+            // 更新当前执行状态
+            const currentEl = document.getElementById('queueCurrent');
+            if (data.current_task) {
+                currentEl.innerHTML = `🔄 正在执行: <strong>${escapeHtml(data.current_task.project_name)}</strong>`;
+                currentEl.style.color = '#059669';
+            } else {
+                currentEl.textContent = '当前空闲';
+                currentEl.style.color = '#666';
+            }
+
+            // 更新队列列表
+            const queueListEl = document.getElementById('queueList');
+            if (data.queued_tasks && data.queued_tasks.length > 0) {
+                queueListEl.style.display = 'block';
+                queueListEl.innerHTML = data.queued_tasks.map((task, idx) => `
+                    <div class="queue-item">
+                        <span class="queue-item-num">${idx + 1}</span>
+                        <span class="queue-item-name">${escapeHtml(task.project_name)}</span>
+                        <span class="queue-item-time">${task.enqueue_time || ''}</span>
+                    </div>
+                `).join('');
+            } else {
+                queueListEl.style.display = 'none';
+            }
+        }
+    } catch (error) {
+        console.error('加载队列状态失败:', error);
+    }
+
+    // 同时检查 CAPTCHA 状态
+    try {
+        const captchaResponse = await fetch('/api/captcha/status');
+        const captchaData = await captchaResponse.json();
+
+        if (captchaData.success) {
+            const captchaAlert = document.getElementById('captchaAlert');
+            const pauseBtn = document.getElementById('pauseBtn');
+            const continueBtn = document.getElementById('continueBtn');
+
+            if (captchaData.pending) {
+                captchaAlert.style.display = 'block';
+                pauseBtn.style.display = 'none';
+                continueBtn.style.display = 'inline-block';
+            } else {
+                captchaAlert.style.display = 'none';
+                if (captchaData.is_paused) {
+                    pauseBtn.style.display = 'none';
+                    continueBtn.style.display = 'inline-block';
+                } else {
+                    pauseBtn.style.display = 'inline-block';
+                    continueBtn.style.display = 'none';
+                }
+            }
+        }
+    } catch (error) {
+        console.error('检查CAPTCHA状态失败:', error);
+    }
+}
+
+async function pauseTask() {
+    try {
+        const response = await fetch('/api/pause', {method: 'POST'});
+        const data = await response.json();
+        if (data.success) {
+            document.getElementById('pauseBtn').style.display = 'none';
+            document.getElementById('continueBtn').style.display = 'inline-block';
+        }
+    } catch (error) {
+        console.error('暂停失败:', error);
+    }
+}
+
+async function continueTask() {
+    try {
+        const response = await fetch('/api/continue', {method: 'POST'});
+        const data = await response.json();
+        if (data.success) {
+            document.getElementById('pauseBtn').style.display = 'inline-block';
+            document.getElementById('continueBtn').style.display = 'none';
+            document.getElementById('captchaAlert').style.display = 'none';
+        }
+    } catch (error) {
+        console.error('继续失败:', error);
+    }
+}
+
+async function continueAfterCaptcha() {
+    await continueTask();
+}

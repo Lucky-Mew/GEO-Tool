@@ -69,7 +69,19 @@ def _find_default_profile(browser_type: str = "Chrome") -> str:
 
 
 def _find_cdp_port() -> int | None:
-    """查找已运行 Chrome 的调试端口（保留但不推荐）。"""
+    """查找已运行 Chrome 的调试端口（9222-9230）。"""
+    import socket
+    for port in range(9222, 9231):
+        try:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.settimeout(0.5)
+            result = sock.connect_ex(('127.0.0.1', port))
+            sock.close()
+            if result == 0:
+                print(f"    [*] 检测到已运行浏览器在端口 {port}")
+                return port
+        except Exception:
+            pass
     return None
 
 
@@ -126,6 +138,24 @@ def _get_delay_for_question(question_index: int, total_questions: int) -> tuple[
         return (45, 60)
     else:
         return (60, 90)
+
+
+def _check_captcha(page) -> bool:
+    """检测是否出现人机验证（简化版，只检测最明显的情况）。"""
+    try:
+        # 只检查最明显的CAPTCHA元素
+        captcha_selectors = [
+            'iframe[src*="captcha"]',
+            'div[class*="secsdk-captcha"]'
+        ]
+        for sel in captcha_selectors:
+            if page.query_selector(sel):
+                print(f"    [CAPTCHA] 检测到元素: {sel}")
+                return True
+    except Exception as e:
+        print(f"    [CAPTCHA] 检测出错: {e}")
+        pass
+    return False
 
 
 def _safe_goto(page, url, timeout_ms=60000):
@@ -249,12 +279,21 @@ def _extract_doubao_response(page) -> dict:
     }
 
 
-def _ask_one_question(page, url: str, question: str, reply_wait: int) -> dict:
+def _ask_one_question(page, url: str, question: str, reply_wait: int, on_captcha=None) -> dict:
     """在已有页面上问一个问题。返回 {'answer': text, 'citations': [{'title': t, 'url': u}, ...]}"""
     print(f"    [Q] Asking: {question[:40]}...")
 
     if not _safe_goto(page, url, timeout_ms=60000):
         return {"answer": "(页面加载失败)", "citations": []}
+
+    # 检查CAPTCHA
+    if _check_captcha(page):
+        print("    [!] 检测到人机验证！")
+        if on_captcha:
+            on_captcha()
+        else:
+            print("    [!] 请在浏览器中手动完成验证，然后按回车继续...")
+            input()
 
     _human_like_pause(page, 1.5, 3.0)
 
@@ -394,8 +433,49 @@ def _ask_one_question(page, url: str, question: str, reply_wait: int) -> dict:
     return _extract_doubao_response(page)
 
 
-def run_doubao_queries(config: dict, questions: list[str]) -> list[dict]:
-    """返回列表：[{'answer': text, 'citations': [{'title': t, 'url': u}, ...]}, ...]"""
+# 全局状态：用于暂停/继续
+_pause_flag = False
+_continue_event = None
+_pause_start_time = None
+MAX_PAUSE_TIME = 300  # 最大暂停时间：5分钟
+
+
+def set_pause_flag(value: bool):
+    """设置暂停标志。"""
+    global _pause_flag, _pause_start_time
+    _pause_flag = value
+    if value:
+        _pause_start_time = time.time()
+        print(f"    [暂停] 任务已暂停，最多等待 {MAX_PAUSE_TIME//60} 分钟")
+    else:
+        _pause_start_time = None
+        print("    [暂停] 任务继续执行")
+
+
+def get_pause_flag() -> bool:
+    """获取暂停标志。"""
+    global _pause_flag
+    return _pause_flag
+
+
+def check_pause_timeout() -> bool:
+    """检查暂停是否超时，如果超时则自动取消暂停。"""
+    global _pause_flag, _pause_start_time
+    if _pause_flag and _pause_start_time:
+        elapsed = time.time() - _pause_start_time
+        if elapsed > MAX_PAUSE_TIME:
+            print(f"    [暂停] 暂停已超时 ({elapsed:.0f}秒)，自动继续执行")
+            _pause_flag = False
+            _pause_start_time = None
+            return True
+    return False
+
+
+def run_doubao_queries(config: dict, questions: list[str], on_captcha=None) -> list[dict]:
+    """返回列表：[{'answer': text, 'citations': [{'title': t, 'url': u}, ...]}, ...]
+
+    on_captcha: 回调函数，当检测到CAPTCHA时调用
+    """
     doubao_config = config.get("doubao", {})
     url = doubao_config.get("url", "https://www.doubao.com/chat/")
     reply_wait = doubao_config.get("reply_wait", 60)
@@ -408,68 +488,129 @@ def run_doubao_queries(config: dict, questions: list[str]) -> list[dict]:
         print("    [!] 未找到浏览器，请在界面选择浏览器或手动设置路径")
         return [{"answer": f"(找不到浏览器) {q}", "citations": []} for q in questions]
 
-    if not chrome_profile:
-        chrome_profile = _find_default_profile(browser_type)
+    # 检查是否禁用CDP连接
+    use_cdp = doubao_config.get("use_cdp", True)
+    cdp_port = None
+    if use_cdp:
+        cdp_port = _find_cdp_port()
+        if cdp_port:
+            print(f"    [CDP] 检测到已运行浏览器 (端口 {cdp_port})，但配置禁用了CDP连接")
+            cdp_port = None
+    else:
+        print("    [CDP] 配置禁用了CDP连接，每次都启动新浏览器")
 
-    if not chrome_profile or not os.path.isdir(chrome_profile):
-        print(f"    [!] 未找到 {browser_type} profile，请先点击自动检测或手动填写路径")
-        return [{"answer": f"(找不到 profile) {q}", "citations": []} for q in questions]
-
-    print(f"    [*] 启动新 {browser_type} 窗口...")
+    ctx = None
+    page = None
+    should_close_ctx = False
 
     with sync_playwright() as p:
         try:
-            ctx = p.chromium.launch_persistent_context(
-                user_data_dir=chrome_profile,
-                executable_path=chrome_exe,
-                headless=False,
-                args=[
-                    "--no-sandbox",
-                    "--disable-blink-features=AutomationControlled",
-                    "--disable-infobars",
-                    "--window-size=1440,900",
-                ],
-                viewport={"width": 1440, "height": 900},
-            )
-        except Exception as e:
-            print(f"    [!] 浏览器启动失败: {e}")
-            print(f"    [!] 可能原因：已有浏览器在使用该 profile，请先关闭浏览器后重试")
-            return [{"answer": f"(浏览器启动失败) {q}", "citations": []} for q in questions]
+            if cdp_port:  # 这个分支现在基本不会走了，因为use_cdp默认false
+                print(f"    [*] 连接到已运行的浏览器 (端口 {cdp_port})...")
+                browser = p.chromium.connect_over_cdp(f"http://127.0.0.1:{cdp_port}")
+                ctx = browser.contexts[0] if browser.contexts else browser.new_context()
+                page = ctx.new_page()
+                should_close_ctx = False
+            else:
+                if not chrome_profile:
+                    chrome_profile = _find_default_profile(browser_type)
 
-        page = ctx.new_page()
+                if not chrome_profile or not os.path.isdir(chrome_profile):
+                    print(f"    [!] 未找到 {browser_type} profile，请先点击自动检测或手动填写路径")
+                    return [{"answer": f"(找不到 profile) {q}", "citations": []} for q in questions]
 
-        print("    [*] 预热浏览器...")
-        if not _safe_goto(page, url, timeout_ms=60000):
-            print("    [!] 无法加载豆包页面")
-            return [{"answer": f"(页面加载失败) {q}", "citations": []} for q in questions]
-        page.wait_for_timeout(3000)
+                print(f"    [*] 启动新 {browser_type} 窗口...")
+                ctx = p.chromium.launch_persistent_context(
+                    user_data_dir=chrome_profile,
+                    executable_path=chrome_exe,
+                    headless=False,
+                    args=[
+                        "--no-sandbox",
+                        "--disable-blink-features=AutomationControlled",
+                        "--disable-infobars",
+                        "--window-size=1440,900",
+                        "--remote-debugging-port=9222",
+                    ],
+                    viewport={"width": 1440, "height": 900},
+                )
+                page = ctx.new_page()
+                should_close_ctx = True
 
-        responses = []
-        for i, q in enumerate(questions):
-            resp = _ask_one_question(page, url, q, reply_wait)
-            responses.append(resp)
-            print(f"    [*] 该回答包含 {len(resp['citations'])} 条参考资料")
+            print("    [*] 预热浏览器...")
+            if not _safe_goto(page, url, timeout_ms=60000):
+                print("    [!] 无法加载豆包页面")
+                return [{"answer": f"(页面加载失败) {q}", "citations": []} for q in questions]
+            page.wait_for_timeout(3000)
 
-            if i < len(questions) - 1:
-                min_delay, max_delay = _get_delay_for_question(i, len(questions))
-                config_delay = doubao_config.get("delay_between_questions")
-                if config_delay:
-                    delay = config_delay
+            # 检查初始CAPTCHA
+            if _check_captcha(page):
+                print("    [!] 检测到人机验证！")
+                if on_captcha:
+                    on_captcha()
                 else:
-                    delay = random.uniform(min_delay, max_delay)
+                    print("    [!] 请在浏览器中手动完成验证，然后按回车继续...")
+                    input()
 
-                print(f"    [*] 等待 {delay:.1f} 秒后继续下一个问题...")
-
-                # 等待时间里不做随机点击
-                start_wait = time.time()
-                while time.time() - start_wait < delay:
-                    _human_like_pause(page, 5.0, 10.0)
-                    if time.time() - start_wait >= delay:
+            responses = []
+            for i, q in enumerate(questions):
+                # 检查暂停标志（带超时）
+                pause_waited = 0
+                while get_pause_flag():
+                    if check_pause_timeout():
                         break
+                    time.sleep(1)
+                    pause_waited += 1
+                    if pause_waited % 30 == 0:  # 每30秒打印一次
+                        print(f"    [暂停] 已等待 {pause_waited} 秒...")
 
-        try:
-            ctx.close()
-        except Exception:
-            pass
+                resp = _ask_one_question(page, url, q, reply_wait, on_captcha)
+                responses.append(resp)
+                print(f"    [*] 该回答包含 {len(resp['citations'])} 条参考资料")
+
+                # 每次回答后检查CAPTCHA
+                if _check_captcha(page):
+                    print("    [!] 检测到人机验证！")
+                    if on_captcha:
+                        on_captcha()
+                    else:
+                        print("    [!] 请在浏览器中手动完成验证，然后按回车继续...")
+                        input()
+
+                if i < len(questions) - 1:
+                    min_delay, max_delay = _get_delay_for_question(i, len(questions))
+                    config_delay = doubao_config.get("delay_between_questions")
+                    if config_delay:
+                        delay = config_delay
+                    else:
+                        delay = random.uniform(min_delay, max_delay)
+
+                    print(f"    [*] 等待 {delay:.1f} 秒后继续下一个问题...")
+
+                    # 等待时间里不做随机点击，但检查暂停
+                    start_wait = time.time()
+                    while time.time() - start_wait < delay:
+                        # 检查暂停（带超时）
+                        pause_waited = 0
+                        while get_pause_flag():
+                            if check_pause_timeout():
+                                break
+                            time.sleep(1)
+                            pause_waited += 1
+                            if pause_waited % 30 == 0:
+                                print(f"    [暂停] 已等待 {pause_waited} 秒...")
+
+                        _human_like_pause(page, 5.0, 10.0)
+                        if time.time() - start_wait >= delay:
+                            break
+
+        except Exception as e:
+            print(f"    [!] 执行出错: {e}")
+            return [{"answer": f"(执行出错: {e}) {q}", "citations": []} for q in questions]
+        finally:
+            if should_close_ctx and ctx:
+                try:
+                    ctx.close()
+                except Exception:
+                    pass
 
     return responses

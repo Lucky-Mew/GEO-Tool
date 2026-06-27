@@ -2,6 +2,7 @@
 
 import sys
 import threading
+import queue
 import json
 from pathlib import Path
 from datetime import datetime
@@ -25,7 +26,7 @@ from src.config import (
 )
 from src.db import models
 
-from src.collector.doubao_query import run_doubao_queries
+from src.collector.doubao_query import run_doubao_queries, _find_default_profile, set_pause_flag, get_pause_flag
 from src.collector.monitor_analysis import analyze_monitor_results
 from src.db import importer
 
@@ -42,6 +43,33 @@ log_lock = threading.Lock()  # 日志锁
 scheduler = None
 if HAS_SCHEDULER:
     scheduler = BackgroundScheduler()
+
+# 任务队列系统
+MAX_QUEUE_SIZE = 10  # 最大队列长度
+task_queue = queue.Queue(maxsize=MAX_QUEUE_SIZE)
+queue_worker_thread = None
+queue_worker_running = False
+queue_lock = threading.Lock()
+
+# 队列任务历史记录（最近20条）
+queue_history = []
+queue_history_lock = threading.Lock()
+
+# 当前正在执行的任务
+current_running_task = None
+
+# CAPTCHA 状态
+captcha_pending = False
+captcha_lock = threading.Lock()
+
+
+def on_captcha_callback():
+    """CAPTCHA 回调：只记录日志，不暂停任务"""
+    global captcha_pending
+    with captcha_lock:
+        captcha_pending = True
+    # 不再设置暂停标志，让任务继续执行
+    print("[!] 检测到 CAPTCHA 提示，但任务将继续执行（如真的需要验证，请在浏览器中手动完成）")
 
 
 def get_project_state(project_id: int):
@@ -66,6 +94,113 @@ def add_log(project_id: int, message: str):
             state['run_logs'].pop(0)
 
 
+def add_queue_history(task_info: dict):
+    """添加队列历史记录"""
+    with queue_history_lock:
+        task_info['timestamp'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        queue_history.insert(0, task_info)
+        if len(queue_history) > 20:
+            queue_history.pop()
+
+
+def queue_worker():
+    """队列工作线程：从队列取任务执行"""
+    global queue_worker_running, current_running_task
+    print("[*] 队列工作线程已启动")
+
+    while queue_worker_running:
+        try:
+            # 尝试从队列取任务，超时1秒检查是否继续运行
+            try:
+                task = task_queue.get(timeout=1)
+            except queue.Empty:
+                continue
+
+            project_id = task['project_id']
+            project_name = task.get('project_name', f'项目{project_id}')
+
+            print(f"[*] 开始执行队列任务: {project_name}")
+
+            # 更新当前执行任务
+            with queue_lock:
+                current_running_task = {
+                    'project_id': project_id,
+                    'project_name': project_name,
+                    'start_time': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                }
+
+            # 添加历史记录
+            add_queue_history({
+                'type': 'start',
+                'project_id': project_id,
+                'project_name': project_name
+            })
+
+            # 执行监测任务
+            try:
+                run_monitor_round(project_id)
+
+                add_queue_history({
+                    'type': 'complete',
+                    'project_id': project_id,
+                    'project_name': project_name
+                })
+                print(f"[OK] 任务完成: {project_name}")
+            except Exception as e:
+                add_queue_history({
+                    'type': 'error',
+                    'project_id': project_id,
+                    'project_name': project_name,
+                    'error': str(e)
+                })
+                print(f"[!] 任务执行出错: {e}")
+            finally:
+                # 清除当前执行任务
+                with queue_lock:
+                    current_running_task = None
+                # 标记任务完成
+                task_queue.task_done()
+
+        except Exception as e:
+            print(f"[!] 队列工作线程出错: {e}")
+
+    print("[*] 队列工作线程已停止")
+
+
+def start_queue_worker():
+    """启动队列工作线程"""
+    global queue_worker_thread, queue_worker_running
+    if queue_worker_thread and queue_worker_thread.is_alive():
+        return
+    queue_worker_running = True
+    queue_worker_thread = threading.Thread(target=queue_worker, daemon=True)
+    queue_worker_thread.start()
+
+
+def enqueue_task(project_id: int, project_name: str = None) -> tuple[bool, str]:
+    """将任务加入队列"""
+    try:
+        if task_queue.full():
+            return False, f"队列已满（最多{MAX_QUEUE_SIZE}个任务），请稍后再试"
+
+        task = {
+            'project_id': project_id,
+            'project_name': project_name or f'项目{project_id}',
+            'enqueue_time': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        }
+        task_queue.put_nowait(task)
+
+        add_queue_history({
+            'type': 'enqueue',
+            'project_id': project_id,
+            'project_name': project_name
+        })
+
+        return True, "任务已加入队列"
+    except Exception as e:
+        return False, f"加入队列失败: {e}"
+
+
 def update_scheduler():
     """更新定时调度任务"""
     if not scheduler:
@@ -84,9 +219,9 @@ def update_scheduler():
                 for hour in schedule_hours:
                     job_id = f'project_{project_id}_hour_{hour}'
                     scheduler.add_job(
-                        run_monitor_round,
+                        enqueue_task,
                         'cron',
-                        args=[project_id],
+                        args=[project_id, project_name],
                         hour=hour,
                         minute=0,
                         id=job_id,
@@ -100,6 +235,9 @@ def update_scheduler():
 
 def start_scheduler():
     """启动定时调度器"""
+    # 先启动队列工作线程
+    start_queue_worker()
+
     if scheduler and not scheduler.running:
         try:
             scheduler.start()
@@ -146,7 +284,7 @@ def run_monitor_round(project_id: int):
         add_log(project_id, f"准备向豆包提问 {len(all_questions)} 个问题")
 
         add_log(project_id, "正在向豆包提问...")
-        response_dicts = run_doubao_queries(config, all_questions)
+        response_dicts = run_doubao_queries(config, all_questions, on_captcha=on_captcha_callback)
         responses = [r['answer'] for r in response_dicts]
         citations_list = [r['citations'] for r in response_dicts]
 
@@ -646,20 +784,29 @@ def api_project_run_status(project_id):
 
 @app.route('/api/projects/<int:project_id>/run/start', methods=['POST'])
 def api_project_run_start(project_id):
-    """开始执行项目监测"""
+    """开始执行项目监测（加入队列）"""
     state = get_project_state(project_id)
 
     if state['is_running']:
         return jsonify({'success': False, 'error': '已有任务在运行中'})
 
-    with log_lock:
-        state['run_logs'].clear()
+    # 获取项目名称
+    config = load_config()
+    project_name = next(
+        (p.get('name') for p in config.get('projects', []) if p.get('id') == project_id),
+        f'项目{project_id}'
+    )
 
-    thread = threading.Thread(target=run_monitor_round, args=(project_id,), daemon=True)
-    thread.start()
-    state['running_thread'] = thread
+    # 加入队列
+    success, message = enqueue_task(project_id, project_name)
 
-    return jsonify({'success': True})
+    if success:
+        with log_lock:
+            state['run_logs'].clear()
+        add_log(project_id, message)
+        return jsonify({'success': True, 'message': message})
+    else:
+        return jsonify({'success': False, 'error': message})
 
 
 # ========== 调度器状态API ==========
@@ -692,6 +839,193 @@ def api_scheduler_status():
         })
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
+
+
+# ========== 队列状态API ==========
+
+@app.route('/api/queue/status', methods=['GET'])
+def api_queue_status():
+    """获取队列状态"""
+    try:
+        queue_size = task_queue.qsize()
+
+        # 获取队列中的任务
+        queued_tasks = []
+        # 注意：queue.Queue 不支持直接遍历，我们通过估算获取
+        temp_queue = []
+        while not task_queue.empty() and len(temp_queue) < MAX_QUEUE_SIZE:
+            try:
+                task = task_queue.get_nowait()
+                queued_tasks.append({
+                    'project_id': task['project_id'],
+                    'project_name': task['project_name'],
+                    'enqueue_time': task.get('enqueue_time')
+                })
+                temp_queue.append(task)
+            except queue.Empty:
+                break
+        # 把任务放回队列
+        for task in temp_queue:
+            try:
+                task_queue.put_nowait(task)
+            except queue.Full:
+                break
+
+        # 当前执行中的任务
+        with queue_lock:
+            current_task = current_running_task.copy() if current_running_task else None
+
+        # 队列历史
+        with queue_history_lock:
+            history = queue_history.copy()
+
+        return jsonify({
+            'success': True,
+            'max_size': MAX_QUEUE_SIZE,
+            'current_size': queue_size,
+            'queued_tasks': queued_tasks,
+            'current_task': current_task,
+            'history': history
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+# ========== 全局设置API ==========
+
+@app.route('/api/global-settings', methods=['GET'])
+def api_get_global_settings():
+    """获取全局设置"""
+    try:
+        config = load_config()
+        doubao_config = config.get('doubao', {})
+        llm_config = config.get('llm_api', {})
+
+        return jsonify({
+            'success': True,
+            'settings': {
+                'browser': doubao_config.get('browser', 'Chrome'),
+                'chrome_profile': doubao_config.get('chrome_profile', ''),
+                'model': llm_config.get('model', ''),
+                'base_url': llm_config.get('base_url', ''),
+                'api_key': llm_config.get('api_key', '')
+            }
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/global-settings', methods=['POST'])
+def api_save_global_settings():
+    """保存全局设置"""
+    try:
+        data = request.get_json()
+
+        config = load_config()
+
+        # 更新浏览器设置
+        config.setdefault('doubao', {})
+        config['doubao']['browser'] = data.get('browser', 'Chrome')
+        config['doubao']['chrome_profile'] = data.get('chrome_profile', '')
+
+        # 更新LLM设置
+        config.setdefault('llm_api', {})
+        config['llm_api']['model'] = data.get('model', '')
+        config['llm_api']['base_url'] = data.get('base_url', '')
+        config['llm_api']['api_key'] = data.get('api_key', '')
+
+        # 自动判断provider
+        base_url = data.get('base_url', '')
+        if 'ark.cn-beijing.volces.com' in base_url or 'maas.aliyuncs.com' in base_url:
+            config['llm_api']['provider'] = 'qwen'
+        elif 'api.anthropic.com' in base_url:
+            config['llm_api']['provider'] = 'claude'
+        elif 'api.openai.com' in base_url:
+            config['llm_api']['provider'] = 'openai'
+        else:
+            config['llm_api']['provider'] = 'openai'
+
+        save_config(config)
+
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/detect-profile', methods=['POST'])
+def api_detect_profile():
+    """自动检测浏览器Profile"""
+    try:
+        data = request.get_json()
+        browser_type = data.get('browser', 'Chrome')
+
+        # 调用doubao_query中的检测函数
+        profile = _find_default_profile(browser_type)
+
+        if profile:
+            return jsonify({
+                'success': True,
+                'profile': profile,
+                'browser': browser_type
+            })
+        else:
+            # 尝试另一个浏览器
+            fallback = 'Edge' if browser_type == 'Chrome' else 'Chrome'
+            profile2 = _find_default_profile(fallback)
+            if profile2:
+                return jsonify({
+                    'success': True,
+                    'profile': profile2,
+                    'browser': fallback
+                })
+            else:
+                return jsonify({
+                    'success': False,
+                    'error': '未检测到浏览器Profile，请手动输入'
+                }), 400
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+# ========== 暂停/继续和CAPTCHA API ==========
+
+@app.route('/api/captcha/status', methods=['GET'])
+def api_captcha_status():
+    """获取CAPTCHA状态"""
+    with captcha_lock:
+        pending = captcha_pending
+    return jsonify({
+        'success': True,
+        'pending': pending,
+        'is_paused': get_pause_flag()
+    })
+
+
+@app.route('/api/captcha/continue', methods=['POST'])
+def api_captcha_continue():
+    """继续执行（CAPTCHA已完成）"""
+    global captcha_pending
+    with captcha_lock:
+        captcha_pending = False
+    set_pause_flag(False)
+    return jsonify({'success': True, 'message': '任务已继续'})
+
+
+@app.route('/api/pause', methods=['POST'])
+def api_pause():
+    """暂停当前任务"""
+    set_pause_flag(True)
+    return jsonify({'success': True})
+
+
+@app.route('/api/continue', methods=['POST'])
+def api_continue():
+    """继续当前任务"""
+    global captcha_pending
+    with captcha_lock:
+        captcha_pending = False
+    set_pause_flag(False)
+    return jsonify({'success': True})
 
 
 @app.route('/static/<path:path>')

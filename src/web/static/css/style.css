@@ -20,9 +20,19 @@ body {
 }
 
 header {
-    text-align: center;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
     color: white;
     margin-bottom: 15px;
+}
+
+.header-left {
+    text-align: left;
+}
+
+.header-right {
+    flex-shrink: 0;
 }
 
 header h1 {
@@ -34,6 +44,25 @@ header h1 {
 .subtitle {
     font-size: 0.9em;
     opacity: 0.9;
+}
+
+.settings-btn {
+    background: rgba(255, 255, 255, 0.2);
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    color: white;
+    font-size: 1.5em;
+    padding: 10px 16px;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    backdrop-filter: blur(10px);
+}
+
+.settings-btn:hover {
+    background: rgba(255, 255, 255, 0.3);
+    border-color: rgba(255, 255, 255, 0.5);
+    transform: scale(1.05) rotate(10deg);
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
 }
 
 /* 主内容布局 */
@@ -74,24 +103,52 @@ header h1 {
 
 .project-item {
     padding: 10px 12px;
-    background: #f8f9fa;
-    border-radius: 6px;
-    margin-bottom: 6px;
+    background: white;
+    border-radius: 8px;
+    margin-bottom: 8px;
     cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    border: 2px solid #e5e7eb;
+    position: relative;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+}
+
+.project-item::after {
+    content: '→';
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #d1d5db;
+    font-size: 0.9em;
     transition: all 0.2s;
-    border: 2px solid transparent;
 }
 
 .project-item:hover {
-    background: #e9ecef;
+    background: #f0f4ff;
+    border-color: #667eea;
+    transform: translateX(3px);
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2);
+}
+
+.project-item:hover::after {
+    color: #667eea;
+    right: 8px;
 }
 
 .project-item.active {
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     color: white;
     border-color: #667eea;
-    transform: translateX(2px);
-    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+    transform: translateX(3px);
+    box-shadow: 0 4px 16px rgba(102, 126, 234, 0.4);
+}
+
+.project-item.active::after {
+    content: '✓';
+    color: white;
+    right: 12px;
+    font-size: 1em;
 }
 
 .project-item-name {
@@ -850,4 +907,217 @@ header h1 {
 .empty-state-icon {
     font-size: 2.5em;
     margin-bottom: 10px;
+}
+
+/* ========== Header 布局 ========== */
+header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    text-align: left;
+    padding: 0 10px;
+}
+
+.header-left {
+    flex: 1;
+}
+
+.header-right {
+    flex-shrink: 0;
+}
+
+/* ========== 设置按钮 ========== */
+.settings-btn {
+    background: rgba(255, 255, 255, 0.2);
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    color: white;
+    font-size: 1.5em;
+    padding: 10px 16px;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    backdrop-filter: blur(10px);
+}
+
+.settings-btn:hover {
+    background: rgba(255, 255, 255, 0.3);
+    border-color: rgba(255, 255, 255, 0.5);
+    transform: scale(1.05) rotate(10deg);
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+}
+
+.settings-btn:active {
+    transform: scale(0.95);
+}
+
+/* ========== 设置弹窗（大号） ========== */
+.modal-large {
+    max-width: 650px;
+}
+
+/* ========== 队列状态区域 ========== */
+.queue-status-section {
+    background: linear-gradient(135deg, #667eea10 0%, #764ba210 100%);
+    border-radius: 8px;
+    padding: 14px;
+    margin-bottom: 16px;
+}
+
+.queue-status-section h4 {
+    margin: 0 0 10px 0;
+    font-size: 0.95em;
+    color: #333;
+}
+
+.queue-status {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 15px;
+    flex-wrap: wrap;
+}
+
+.queue-count {
+    font-size: 0.9em;
+    color: #555;
+}
+
+.queue-count strong {
+    color: #667eea;
+    font-size: 1.1em;
+}
+
+.queue-current {
+    font-size: 0.9em;
+    color: #666;
+}
+
+/* ========== 队列列表 ========== */
+.queue-list {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px dashed rgba(102, 126, 234, 0.3);
+}
+
+.queue-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px;
+    background: rgba(255, 255, 255, 0.7);
+    border-radius: 6px;
+    margin-bottom: 6px;
+    font-size: 0.9em;
+}
+
+.queue-item:last-child {
+    margin-bottom: 0;
+}
+
+.queue-item-num {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    background: #667eea;
+    color: white;
+    border-radius: 50%;
+    font-size: 0.75em;
+    font-weight: bold;
+}
+
+.queue-item-name {
+    flex: 1;
+    color: #333;
+    font-weight: 500;
+}
+
+.queue-item-time {
+    color: #999;
+    font-size: 0.85em;
+}
+
+/* ========== 设置分割线 ========== */
+.settings-divider {
+    border: none;
+    border-top: 1px solid #e9ecef;
+    margin: 18px 0;
+}
+
+/* ========== CAPTCHA 提示 ========== */
+.captcha-alert {
+    background: linear-gradient(135deg, #fff7ed, #ffedd5);
+    border: 2px solid #f97316;
+    border-radius: 10px;
+    padding: 16px;
+    margin-bottom: 12px;
+}
+
+.captcha-alert-title {
+    font-weight: bold;
+    color: #c2410c;
+    margin-bottom: 8px;
+    font-size: 1.05em;
+}
+
+.captcha-alert-text {
+    color: #9a3412;
+    margin-bottom: 12px;
+    font-size: 0.95em;
+}
+
+/* ========== 设置区域 ========== */
+.settings-section {
+    margin-bottom: 8px;
+}
+
+.settings-section h4 {
+    margin: 0 0 12px 0;
+    font-size: 0.95em;
+    color: #333;
+}
+
+/* ========== 表单行布局 ========== */
+.form-row {
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+}
+
+.form-row .form-group {
+    margin-bottom: 0;
+}
+
+.form-row .form-group:first-child {
+    flex-shrink: 0;
+}
+
+.form-row .form-group:last-child {
+    flex: 1;
+}
+
+/* ========== Profile 输入行 ========== */
+.profile-input-row {
+    display: flex;
+    gap: 8px;
+}
+
+.profile-input-row .form-input {
+    flex: 1;
+}
+
+.profile-input-row .btn-small {
+    flex-shrink: 0;
+    white-space: nowrap;
+}
+
+/* ========== 次要按钮样式 ========== */
+.btn-secondary {
+    background: #6b7280;
+    color: white;
+}
+
+.btn-secondary:hover {
+    background: #4b5563;
 }
