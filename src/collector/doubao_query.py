@@ -141,20 +141,7 @@ def _get_delay_for_question(question_index: int, total_questions: int) -> tuple[
 
 
 def _check_captcha(page) -> bool:
-    """检测是否出现人机验证（简化版，只检测最明显的情况）。"""
-    try:
-        # 只检查最明显的CAPTCHA元素
-        captcha_selectors = [
-            'iframe[src*="captcha"]',
-            'div[class*="secsdk-captcha"]'
-        ]
-        for sel in captcha_selectors:
-            if page.query_selector(sel):
-                print(f"    [CAPTCHA] 检测到元素: {sel}")
-                return True
-    except Exception as e:
-        print(f"    [CAPTCHA] 检测出错: {e}")
-        pass
+    """检测是否出现人机验证（暂时禁用，太容易误触发）。"""
     return False
 
 
@@ -604,8 +591,10 @@ def run_doubao_queries(config: dict, questions: list[str], on_captcha=None) -> l
                             break
 
         except Exception as e:
-            print(f"    [!] 执行出错: {e}")
-            return [{"answer": f"(执行出错: {e}) {q}", "citations": []} for q in questions]
+            # 安全打印，避免gbk编码错误
+            safe_error = str(e).encode('gbk', errors='replace').decode('gbk')
+            print(f"    [!] 执行出错: {safe_error}")
+            return [{"answer": f"(执行出错) {q}", "citations": []} for q in questions]
         finally:
             if should_close_ctx and ctx:
                 try:

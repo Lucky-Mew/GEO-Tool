@@ -59,6 +59,7 @@ function renderProjectList(projects) {
 function selectProject(projectId, name, description) {
     currentProjectId = projectId;
     currentProjectName = name;
+    currentDate = null;
 
     document.querySelectorAll('.project-item').forEach(el => el.classList.remove('active'));
     const el = document.getElementById(`project-${projectId}`);
@@ -70,6 +71,11 @@ function selectProject(projectId, name, description) {
     document.getElementById('currentProjectName').textContent = name;
     document.getElementById('currentProjectDesc').textContent = description || '';
     document.getElementById('projectBrandName').textContent = name;
+
+    // 重置所有视图状态
+    document.getElementById('taskSection').style.display = 'none';
+    document.getElementById('taskDetailSection').style.display = 'none';
+    document.getElementById('detailSection').style.display = 'none';
 
     showView('control');
     initControlView();
@@ -372,6 +378,11 @@ function hideDetail() {
 // ========== 文件浏览视图 ==========
 
 function initFilesView() {
+    // 重置视图状态
+    document.getElementById('taskSection').style.display = 'none';
+    document.getElementById('taskDetailSection').style.display = 'none';
+    currentDate = null;
+    // 重新加载日期列表
     loadFileDateList();
 }
 
@@ -874,18 +885,96 @@ async function loadSchedulerStatus() {
         }
 
         if (data.jobs && data.jobs.length > 0) {
-            jobsList.innerHTML = data.jobs.map(job => `
-                <div style="padding: 5px 0; border-bottom: 1px solid #eee;">
-                    <strong>${escapeHtml(job.name)}</strong><br>
-                    <span style="color: #666; font-size: 0.9em;">下次执行: ${escapeHtml(job.next_run_time || '未知')}</span>
-                </div>
-            `).join('');
+            // 按项目分组
+            const grouped = {};
+            data.jobs.forEach(job => {
+                // 从job.name中提取项目名和时间，格式是"项目名_时间:00"
+                const match = job.name.match(/^(.+)_(\d+):00$/);
+                let projectName = job.name;
+                let hour = '';
+                if (match) {
+                    projectName = match[1];
+                    hour = match[2];
+                }
+
+                if (!grouped[projectName]) {
+                    grouped[projectName] = {
+                        hours: [],
+                        next_run_time: job.next_run_time
+                    };
+                }
+                if (hour) {
+                    grouped[projectName].hours.push(parseInt(hour));
+                }
+                // 保留最早的下次执行时间
+                if (!grouped[projectName].next_run_time ||
+                    (job.next_run_time && job.next_run_time < grouped[projectName].next_run_time)) {
+                    grouped[projectName].next_run_time = job.next_run_time;
+                }
+            });
+
+            // 渲染分组后的任务
+            let html = '';
+            for (const projectName in grouped) {
+                const info = grouped[projectName];
+                // 对小时排序
+                info.hours.sort((a, b) => a - b);
+                // 生成连续时间段描述
+                const timeDesc = formatTimeRange(info.hours);
+
+                html += `
+                    <div class="scheduled-job-group">
+                        <div class="scheduled-job-header">
+                            <span class="scheduled-job-project">${escapeHtml(projectName)}</span>
+                        </div>
+                        <div class="scheduled-job-times">
+                            <span class="time-label">定时:</span>
+                            ${timeDesc}
+                        </div>
+                        <div class="scheduled-job-next">
+                            下次执行: ${escapeHtml(info.next_run_time || '未知')}
+                        </div>
+                    </div>
+                `;
+            }
+            jobsList.innerHTML = html;
         } else {
             jobsList.innerHTML = '<span style="color: #999;">暂无定时任务，请在上方选择时间并保存</span>';
         }
     } catch (error) {
         console.error('加载调度器状态失败:', error);
     }
+}
+
+// 格式化时间范围，例如 [9,10,11,14,15] -> "9:00-11:00, 14:00-15:00"
+function formatTimeRange(hours) {
+    if (hours.length === 0) return '';
+    if (hours.length === 1) return `<span class="time-tag">${hours[0]}:00</span>`;
+
+    // 查找连续时间段
+    const ranges = [];
+    let start = hours[0];
+    let end = hours[0];
+
+    for (let i = 1; i < hours.length; i++) {
+        if (hours[i] === end + 1) {
+            end = hours[i];
+        } else {
+            ranges.push({start, end});
+            start = hours[i];
+            end = hours[i];
+        }
+    }
+    ranges.push({start, end});
+
+    // 生成描述
+    return ranges.map(r => {
+        if (r.start === r.end) {
+            return `<span class="time-tag">${r.start}:00</span>`;
+        } else {
+            return `<span class="time-tag range">${r.start}:00-${r.end}:00</span>`;
+        }
+    }).join('');
 }
 
 // ========== 辅助函数 ==========

@@ -38,6 +38,7 @@ models.init_db()
 # 全局状态
 project_states = {}  # 每个项目的独立状态
 log_lock = threading.Lock()  # 日志锁
+global_run_lock = threading.Lock()  # 全局运行锁：确保同一时间只有一个任务在执行
 
 # 定时调度器
 scheduler = None
@@ -254,10 +255,16 @@ def run_monitor_round(project_id: int):
         add_log(project_id, "已有任务在运行中")
         return
 
-    state['is_running'] = True
-    add_log(project_id, "开始执行监测任务")
+    # 先获取全局锁，确保同一时间只有一个任务在执行
+    if not global_run_lock.acquire(blocking=False):
+        add_log(project_id, "其他任务正在执行中，已加入队列稍后执行")
+        return
 
     try:
+        state['is_running'] = True
+        add_log(project_id, "开始执行监测任务")
+
+        config = load_config()
         config = load_config()
         project_config = get_project_config(project_id)
 
@@ -414,6 +421,7 @@ def run_monitor_round(project_id: int):
         add_log(project_id, traceback.format_exc())
     finally:
         state['is_running'] = False
+        global_run_lock.release()  # 释放全局锁
 
 
 @app.route('/')

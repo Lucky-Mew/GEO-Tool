@@ -1121,3 +1121,67 @@ header {
 .btn-secondary:hover {
     background: #4b5563;
 }
+
+/* ========== 即将执行的任务 - 分组样式 ========== */
+.scheduled-job-group {
+    background: linear-gradient(135deg, #f8f9ff 0%, #f0f4ff 100%);
+    border: 1px solid #e0e7ff;
+    border-radius: 8px;
+    padding: 12px;
+    margin-bottom: 8px;
+}
+
+.scheduled-job-group:last-child {
+    margin-bottom: 0;
+}
+
+.scheduled-job-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.scheduled-job-project {
+    font-weight: 600;
+    color: #4338ca;
+    font-size: 0.95em;
+}
+
+.scheduled-job-times {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 6px;
+}
+
+.time-label {
+    color: #666;
+    font-size: 0.85em;
+    font-weight: 500;
+}
+
+.time-tag {
+    display: inline-block;
+    padding: 3px 8px;
+    background: #667eea;
+    color: white;
+    border-radius: 12px;
+    font-size: 0.8em;
+    font-weight: 500;
+    margin-right: 4px;
+    margin-bottom: 4px;
+}
+
+.time-tag.range {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    padding: 3px 10px;
+}
+
+.scheduled-job-next {
+    color: #666;
+    font-size: 0.8em;
+    padding-top: 6px;
+    border-top: 1px dashed #d1d5db;
+}
