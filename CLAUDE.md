@@ -11,7 +11,6 @@ GEO（Generative Engine Optimization）品牌监测工具，自动监测品牌�
 ## 技术栈
 
 - **Python 3.12** (Windows)
-- **Tkinter** - GUI 桌面应用
 - **Playwright** (sync_playwright) - 浏览器自动化
 - **Flask** - Web 仪表盘后端
 - **ECharts** - 前端图表（CDN 加载）
@@ -23,7 +22,6 @@ GEO（Generative Engine Optimization）品牌监测工具，自动监测品牌�
 
 ```
 GEO-Tool/
-├── run_gui.py                    # 启动 GUI
 ├── run_web.py                    # 启动 Web 仪表盘
 ├── config.yaml                   # 配置文件
 ├── requirements.txt
@@ -32,7 +30,6 @@ GEO-Tool/
 ├── src/
 │   ├── config.py                 # 统一配置管理
 │   ├── collector/                # 数据采集模块
-│   │   ├── gui.py                # Tkinter GUI
 │   │   ├── question_generator.py # LLM 衍生问题
 │   │   ├── doubao_query.py       # Playwright 浏览器自动化
 │   │   └── monitor_analysis.py   # LLM 分析回复
@@ -50,7 +47,6 @@ GEO-Tool/
 
 ## 启动方式
 
-- **GUI 采集数据**：`python run_gui.py`
 - **Web 仪表盘**：`python run_web.py` → http://localhost:5000
 
 ## 关键技术决策

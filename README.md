@@ -7,8 +7,7 @@
 ```
 GEO-Tool/
 ├── src/
-│   ├── collector/          # 数据采集模块（Tkinter GUI）
-│   │   ├── gui.py
+│   ├── collector/          # 数据采集模块
 │   │   ├── question_generator.py
 │   │   ├── doubao_query.py
 │   │   └── monitor_analysis.py
@@ -25,7 +24,6 @@ GEO-Tool/
 │   └── geo_monitor.db      # SQLite 数据库
 ├── config.yaml             # 配置文件
 ├── requirements.txt        # 依赖
-├── run_gui.py             # 启动 GUI
 └── run_web.py             # 启动 Web 仪表盘
 ```
 
@@ -80,30 +78,23 @@ playwright install chromium
 cp config.example.yaml config.yaml
 ```
 
-然后编辑 `config.yaml`，或在 GUI 界面直接配置。
+然后编辑 `config.yaml`，或在 Web 界面直接配置。
 
 ## 运行方式
 
-### 1. 启动 GUI 采集数据
-
-```bash
-python run_gui.py
-```
-
-GUI 功能：
-- **测试连接** — 测试 LLM API 是否配置正确
-- **立即执行** — 马上跑一次完整监测流程
-- **定时监测** — 设置每天固定时间自动执行（最多5个时间点）
-- **导入数据** — 导入历史 JSON 数据到数据库
-- **Web 仪表盘** — 一键打开可视化页面
-
-### 2. 启动 Web 仪表盘查看数据
+### 启动 Web 仪表盘
 
 ```bash
 python run_web.py
 ```
 
-然后访问 `http://localhost:5000` 查看可视化图表。
+然后访问 `http://localhost:5000` 使用完整功能：
+- **项目管理** — 创建和管理多个监测项目
+- **任务配置** — 添加和编辑监测任务
+- **立即执行** — 马上跑一次完整监测流程
+- **定时监测** — 设置每天固定时间自动执行
+- **数据可视化** — 仪表盘查看趋势和统计
+- **文件浏览** — 查看历史数据和报告
 
 ## 功能说明
 
@@ -165,7 +156,7 @@ data/
 
 ### Q: 可以换其他 LLM 吗？
 
-可以。在 GUI 界面直接修改：
+可以。在 Web 界面的"全局设置"中修改：
 - **模型名称** — 填入你的模型名（如 `qwen3.6-flash`、`doubao-seed-2.0-code`、`gpt-4o`）
 - **API 地址** — 填入服务商提供的 API 地址
 - **API Key** — 填入你的密钥
@@ -175,14 +166,6 @@ data/
 - 火山引擎豆包（Anthropic/OpenAI 兼容）
 - OpenAI 及兼容接口
 - Anthropic Claude
-
-### Q: 旧的 output/ 目录下的数据怎么办？
-
-运行一次 GUI 工具，点击"导入数据"按钮，旧数据会被导入到数据库中。
-
-### Q: Web 仪表盘和 GUI 可以同时运行吗？
-
-可以。Web 仪表盘只是读取数据，不会冲突。建议用 GUI 采集数据，用 Web 查看。
 
 ## 技术说明
 
@@ -203,8 +186,7 @@ data/
 - 新增 `src/db/` 数据库模块
 - 新增 `src/config.py` 统一配置管理
 - 数据目录从 `output/` 改为 `data/`
-- 启动脚本改为 `run_gui.py` 和 `run_web.py`
-- 保留向后兼容，旧数据可通过 GUI 导入
+- 启动脚本统一为 `run_web.py`
 
 ## 许可
 
