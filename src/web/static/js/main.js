@@ -1,9 +1,12 @@
 // GEO 品牌监测 - 主应用逻辑
 
 let currentProjectId = null;
+let statusPollingTimer = null;
+let isCurrentlyRunning = false;
 let currentProjectName = '';
 let trendChart = null;
 let positionChart = null;
+let trendStats = [];
 
 // 页面加载
 document.addEventListener('DOMContentLoaded', () => {
@@ -137,8 +140,7 @@ function showView(viewName) {
         initDashboardView();
     } else if (viewName === 'files') {
         initFilesView();
-    } else if (viewName === 'control') {
-        initControlView();
+    } else if (viewName === 'control') {initControlView();
     }
 }
 
@@ -152,14 +154,31 @@ function initDashboardView() {
 }
 
 function initCharts() {
+    console.log('初始化图表...');
+
+    // 确保图表容器有尺寸
+    const trendDom = document.getElementById('trendChart');
+    const positionDom = document.getElementById('positionChart');
+
+    if (!trendDom || !positionDom) {
+        console.error('找不到图表容器');
+        return;
+    }
+
+    // 设置容器高度
+    trendDom.style.height = '350px';
+    trendDom.style.width = '100%';
+    positionDom.style.height = '320px';
+    positionDom.style.width = '100%';
+
     if (!trendChart) {
-        const trendDom = document.getElementById('trendChart');
         trendChart = echarts.init(trendDom);
+        console.log('趋势图初始化完成');
     }
 
     if (!positionChart) {
-        const positionDom = document.getElementById('positionChart');
         positionChart = echarts.init(positionDom);
+        console.log('位置图初始化完成');
     }
 
     window.addEventListener('resize', () => {
@@ -190,6 +209,7 @@ async function loadSummary() {
         const avgRate = totalQuestions > 0 ? Math.round((totalMentionCount / totalQuestions) * 100) : 0;
         document.getElementById('mentionRate').textContent = avgRate + '%';
         document.getElementById('totalQuestions').textContent = totalQuestions;
+        document.getElementById('totalMentions').textContent = totalMentionCount;
 
         renderDateList(dates, summaries);
     } catch (error) {
@@ -225,6 +245,7 @@ async function loadPositionDistribution() {
 
 function renderDateList(dates, summaries) {
     const container = document.getElementById('dateList');
+    const isCompact = container.classList.contains('compact');
 
     if (!dates || dates.length === 0) {
         container.innerHTML = `
@@ -236,23 +257,58 @@ function renderDateList(dates, summaries) {
         return;
     }
 
-    container.innerHTML = dates.map(date => {
-        const summary = summaries.find(s => s.date_str === date);
-        const mentionCount = summary?.brand_mentioned_count || 0;
-        const totalQ = summary?.total_questions || 0;
-        const rate = totalQ > 0 ? Math.round((mentionCount / totalQ) * 100) : 0;
+    if (isCompact) {
+        container.innerHTML = dates.map(date => {
+            const summary = summaries.find(s => s.date_str === date);
+            const mentionCount = summary?.brand_mentioned_count || 0;
+            const totalQ = summary?.total_questions || 0;
+            const rate = totalQ > 0 ? Math.round((mentionCount / totalQ) * 100) : 0;
 
-        return `
-            <div class="date-item" onclick="showDetail('${date}')">
-                <div class="date-item-title">${formatDate(date)}</div>
-                <div class="date-item-meta">提及率: ${rate}% | ${totalQ}个问题</div>
-            </div>
-        `;
-    }).join('');
+            return `
+                <div class="date-item compact" onclick="showDetail('${date}')">
+                    <span class="date-text">${formatDate(date)}</span>
+                    <span class="rate-badge" style="background: ${rate >= 70 ? '#10b981' : rate >= 40 ? '#f59e0b' : '#ef4444'}">${rate}%</span>
+                </div>
+            `;
+        }).join('');
+    } else {
+        container.innerHTML = dates.map(date => {
+            const summary = summaries.find(s => s.date_str === date);
+            const mentionCount = summary?.brand_mentioned_count || 0;
+            const totalQ = summary?.total_questions || 0;
+            const rate = totalQ > 0 ? Math.round((mentionCount / totalQ) * 100) : 0;
+
+            return `
+                <div class="date-item" onclick="showDetail('${date}')">
+                    <div class="date-item-title">${formatDate(date)}</div>
+                    <div class="date-item-meta">提及率: ${rate}% | ${totalQ}个问题</div>
+                </div>
+            `;
+        }).join('');
+    }
 }
 
 function renderTrendChart(stats) {
-    if (!trendChart) return;
+    console.log('渲染趋势图，数据:', stats);
+    if (!trendChart) {
+        console.error('趋势图未初始化');
+        return;
+    }
+    trendStats = stats;
+
+    if (!stats || stats.length === 0) {
+        console.log('没有数据，显示空图表');
+        const option = {
+            title: {
+                text: '暂无数据',
+                left: 'center',
+                top: 'center',
+                textStyle: {color: '#999', fontSize: 16}
+            }
+        };
+        trendChart.setOption(option, true);
+        return;
+    }
 
     const dates = stats.map(s => formatDate(s.date_str));
     const mentionRates = stats.map(s => {
@@ -260,67 +316,235 @@ function renderTrendChart(stats) {
         const m = s.mention_count || 0;
         return q > 0 ? Math.round((m / q) * 100) : 0;
     });
+    const mentionCounts = stats.map(s => s.mention_count || 0);
+
+    console.log('日期:', dates);
+    console.log('提及率:', mentionRates);
+    console.log('提及次数:', mentionCounts);
 
     const option = {
         tooltip: {
-            trigger: 'axis',
-            formatter: (params) => {
-                const p = params[0];
-                return `${p.name}<br/>提及率: ${p.value}%`;
-            }
+            trigger: 'axis'
         },
-        grid: {left: '3%', right: '4%', bottom: '3%', containLabel: true},
-        xAxis: {type: 'category', boundaryGap: false, data: dates},
-        yAxis: {type: 'value', min: 0, max: 100, axisLabel: {formatter: '{value}%'}},
-        series: [{
-            name: '提及率',
-            type: 'line',
-            smooth: true,
-            data: mentionRates,
-            areaStyle: {
-                color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-                    {offset: 0, color: 'rgba(102, 126, 234, 0.3)'},
-                    {offset: 1, color: 'rgba(102, 126, 234, 0.05)'}
-                ])
+        legend: {
+            data: ['提及率', '提及次数'],
+            top: 0
+        },
+        grid: {left: '5%', right: '8%', bottom: '18%', top: '15%', containLabel: true},
+        xAxis: {
+            type: 'category',
+            boundaryGap: true,
+            data: dates
+        },
+        yAxis: [
+            {
+                type: 'value',
+                name: '提及率',
+                min: 0,
+                max: 100,
+                position: 'left',
+                axisLabel: {formatter: '{value}%'},
+                nameGap: 30
             },
-            lineStyle: {color: '#667eea', width: 2},
-            itemStyle: {color: '#667eea'}
-        }]
+            {
+                type: 'value',
+                name: '提及次数',
+                position: 'right',
+                splitLine: {show: false},
+                nameGap: 30
+            }
+        ],
+        dataZoom: [
+            {
+                type: 'slider',
+                show: true,
+                xAxisIndex: [0],
+                start: 0,
+                end: 100,
+                bottom: 30,
+                height: 20,
+                handleSize: '80%',
+                handleStyle: {
+                    color: '#667eea',
+                    borderColor: '#667eea'
+                },
+                fillerStyle: {
+                    color: 'rgba(102, 126, 234, 0.2)'
+                },
+                backgroundColor: '#f0f0f0',
+                showDetail: false
+            },
+            {
+                type: 'inside',
+                xAxisIndex: [0],
+                start: 0,
+                end: 100
+            }
+        ],
+        series: [
+            {
+                name: '提及率',
+                type: 'line',
+                smooth: true,
+                yAxisIndex: 0,
+                data: mentionRates,
+                symbol: 'circle',
+                symbolSize: 8,
+                showSymbol: true,
+                areaStyle: {
+                    color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                        {offset: 0, color: 'rgba(102, 126, 234, 0.3)'},
+                        {offset: 1, color: 'rgba(102, 126, 234, 0.05)'}
+                    ])
+                },
+                lineStyle: {color: '#667eea', width: 2},
+                itemStyle: {
+                    color: '#667eea'
+                },
+                label: {
+                    show: true,
+                    position: 'top',
+                    color: '#667eea',
+                    formatter: '{c}%'
+                }
+            },
+            {
+                name: '提及次数',
+                type: 'bar',
+                yAxisIndex: 1,
+                data: mentionCounts,
+                barWidth: '20%',
+                itemStyle: {
+                    color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                        {offset: 0, color: 'rgba(245, 158, 11, 0.9)'},
+                        {offset: 1, color: 'rgba(245, 158, 11, 0.5)'}
+                    ]),
+                    borderRadius: [4, 4, 0, 0]
+                }
+            }
+        ]
     };
 
     trendChart.setOption(option, true);
+    console.log('趋势图渲染完成');
 }
 
 function renderPositionChart(positionData, brandName) {
-    if (!positionChart) return;
+    console.log('渲染位置图，数据:', positionData);
+    if (!positionChart) {
+        console.error('位置图未初始化');
+        return;
+    }
 
     const positionLabels = {'first': '开头', 'middle': '中间', 'last': '结尾'};
+    const colorList = ['#667eea', '#f59e0b', '#10b981'];
     const categories = [];
     const values = [];
+    let total = 0;
 
     for (const pos in positionData) {
         categories.push(positionLabels[pos] || pos);
         values.push(positionData[pos]);
+        total += positionData[pos];
+    }
+
+    console.log('位置:', categories);
+    console.log('数值:', values);
+    console.log('总计:', total);
+
+    if (categories.length === 0 || total === 0) {
+        console.log('没有位置数据');
+        const option = {
+            title: {
+                text: '暂无数据',
+                left: 'center',
+                top: 'center',
+                textStyle: {color: '#999', fontSize: 16}
+            }
+        };
+        positionChart.setOption(option, true);
+        return;
     }
 
     const option = {
-        tooltip: {trigger: 'item', confine: true},
-        legend: {orient: 'horizontal', bottom: 10, left: 'center'},
+        tooltip: {
+            trigger: 'item',
+            confine: true,
+            backgroundColor: 'rgba(255, 255, 255, 0.95)',
+            borderColor: '#e5e7eb',
+            borderWidth: 1,
+            textStyle: {color: '#374151'},
+            formatter: '{b}<br/>{c}次 ({d}%)'
+        },
+        legend: {
+            orient: 'horizontal',
+            bottom: '5%',
+            left: 'center',
+            itemWidth: 12,
+            itemHeight: 12,
+            textStyle: {color: '#4b5563', fontSize: 13},
+            itemGap: 20
+        },
+        graphic: [
+            {
+                type: 'text',
+                left: 'center',
+                top: '42%',
+                style: {
+                    text: total + '',
+                    textAlign: 'center',
+                    fill: '#1f2937',
+                    fontSize: 28,
+                    fontWeight: 'bold'
+                }
+            },
+            {
+                type: 'text',
+                left: 'center',
+                top: '55%',
+                style: {
+                    text: '总提及',
+                    textAlign: 'center',
+                    fill: '#9ca3af',
+                    fontSize: 13
+                }
+            }
+        ],
         series: [{
             name: '出现次数',
             type: 'pie',
             radius: ['35%', '55%'],
-            center: ['50%', '48%'],
+            center: ['50%', '45%'],
             avoidLabelOverlap: true,
-            itemStyle: {borderRadius: 6, borderColor: '#fff', borderWidth: 2},
-            label: {show: true, position: 'outside', formatter: '{b}\n{c}次 ({d}%)', lineHeight: 20, fontSize: 12},
-            labelLine: {show: true, length: 20, length2: 25, smooth: true},
-            emphasis: {label: {show: true, fontSize: 14, fontWeight: 'bold'}, scale: true, scaleSize: 8},
-            data: categories.map((cat, i) => ({value: values[i], name: cat}))
+            itemStyle: {
+                borderRadius: 8,
+                borderColor: '#fff',
+                borderWidth: 3
+            },
+            label: {
+                show: false
+            },
+            labelLine: {
+                show: false
+            },
+            emphasis: {
+                scale: true,
+                scaleSize: 8,
+                itemStyle: {
+                    shadowBlur: 10,
+                    shadowColor: 'rgba(0,0,0,0.2)'
+                }
+            },
+            data: categories.map((cat, i) => ({
+                value: values[i],
+                name: cat,
+                itemStyle: {color: colorList[i % colorList.length]}
+            }))
         }]
     };
 
     positionChart.setOption(option, true);
+    console.log('位置图渲染完成');
 }
 
 async function showDetail(dateStr) {
@@ -707,8 +931,17 @@ async function saveTasks() {
 // ========== 执行控制 ==========
 
 function startStatusPolling() {
-    setInterval(loadStatus, 1000);
     loadStatus();
+    scheduleNextPoll(3000); // 初始3秒刷新一次
+}
+
+function scheduleNextPoll(delay) {
+    if (statusPollingTimer) {
+        clearTimeout(statusPollingTimer);
+    }
+    statusPollingTimer = setTimeout(() => {
+        loadStatus();
+    }, delay);
 }
 
 async function loadStatus() {
@@ -726,11 +959,13 @@ async function loadStatus() {
             statusText.style.color = '#059669';
             startBtn.disabled = true;
             startBtn.style.opacity = '0.5';
+            isCurrentlyRunning = true;
         } else {
             statusText.textContent = '状态: 空闲';
             statusText.style.color = '#666';
             startBtn.disabled = false;
             startBtn.style.opacity = '1';
+            isCurrentlyRunning = false;
         }
 
         const logContent = document.getElementById('logContent');
@@ -740,8 +975,13 @@ async function loadStatus() {
         } else {
             logContent.innerHTML = '等待执行...';
         }
+
+        // 根据状态决定下一次刷新的间隔
+        const nextDelay = isCurrentlyRunning ? 1000 : 5000; // 运行时1秒，空闲时5秒
+        scheduleNextPoll(nextDelay);
     } catch (error) {
         console.error('加载状态失败:', error);
+        scheduleNextPoll(5000); // 出错时5秒后重试
     }
 }
 

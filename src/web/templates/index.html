@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>GEO 品牌监测仪表盘</title>
-    <link rel="stylesheet" href="/static/css/style.css?v=2">
+    <link rel="stylesheet" href="/static/css/style.css?v=12">
 </head>
 <body>
     <div class="container">
@@ -117,28 +117,32 @@
                                 <div class="stat-value" id="totalQuestions">--</div>
                                 <div class="stat-label">总问题数</div>
                             </div>
+                            <div class="stat-card">
+                                <div class="stat-value" id="totalMentions">--</div>
+                                <div class="stat-label">总提及次数</div>
+                            </div>
                         </div>
 
-                        <div class="charts-row">
-                            <section class="chart-section">
-                                <h3>📈 品牌提及趋势</h3>
-                                <div class="chart-container">
-                                    <canvas id="trendChart"></canvas>
-                                </div>
-                            </section>
+                        <section class="chart-section full-width">
+                            <h3>📈 品牌提及趋势</h3>
+                            <div class="chart-container" style="height: 350px;">
+                                <div id="trendChart"></div>
+                            </div>
+                        </section>
 
+                        <div class="charts-row-bottom">
                             <section class="chart-section">
                                 <h3>📍 品牌出现位置分布</h3>
-                                <div class="chart-container">
-                                    <canvas id="positionChart"></canvas>
+                                <div class="chart-container" style="height: 320px;">
+                                    <div id="positionChart"></div>
                                 </div>
                             </section>
-                        </div>
 
-                        <section class="data-section">
-                            <h3>📅 历史数据</h3>
-                            <div id="dateList" class="date-list"></div>
-                        </section>
+                            <section class="data-section compact">
+                                <h3>📅 历史数据</h3>
+                                <div id="dateList" class="date-list compact"></div>
+                            </section>
+                        </div>
 
                         <section class="detail-section" id="detailSection" style="display: none;">
                             <h3>🔍 详情: <span id="detailDate"></span></h3>
@@ -314,6 +318,6 @@
     <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
     <!-- Marked.js for Markdown rendering -->
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-    <script src="/static/js/main.js"></script>
+    <script src="/static/js/main.js?v=2"></script>
 </body>
 </html>

@@ -141,7 +141,72 @@ def _get_delay_for_question(question_index: int, total_questions: int) -> tuple[
 
 
 def _check_captcha(page) -> bool:
-    """检测是否出现人机验证（暂时禁用，太容易误触发）。"""
+    """检测是否出现人机验证。"""
+    try:
+        # 检测常见的验证元素关键词（去掉了太泛的"验证"）
+        captcha_keywords = [
+            '人机验证', 'captcha', 'Captcha', 'CAPTCHA',
+            '安全验证', '请完成验证', '滑动验证', '点击验证'
+        ]
+
+        # 检查页面文本
+        page_text = page.inner_text('body') or ''
+        found_keyword = False
+        for kw in captcha_keywords:
+            if kw in page_text:
+                found_keyword = True
+                break
+
+        # 检查常见的验证元素
+        captcha_selectors = [
+            'div[class*="captcha"]',
+            'div[class*="verify"]',
+            'div[class*="validation"]',
+            'iframe[src*="captcha"]',
+            'iframe[src*="verify"]'
+        ]
+
+        found_element = False
+        for sel in captcha_selectors:
+            try:
+                if page.query_selector(sel):
+                    found_element = True
+                    break
+            except:
+                pass
+
+        # 只有同时找到关键词和元素才认为是 CAPTCHA（降低误判率）
+        if found_keyword and found_element:
+            return True
+
+    except Exception:
+        pass
+
+    return False
+
+
+def _wait_for_captcha_resolution(page, timeout: int = 300) -> bool:
+    """等待用户完成人机验证。返回 True 表示验证完成，False 表示超时。"""
+    print(f"    [!] 检测到人机验证，请在浏览器中手动完成验证...")
+    print(f"    [*] 程序会等待最多 {timeout} 秒，验证完成后自动继续")
+
+    start_time = time.time()
+    check_interval = 2  # 每2秒检查一次
+
+    while time.time() - start_time < timeout:
+        remaining = int(timeout - (time.time() - start_time))
+
+        if not _check_captcha(page):
+            print(f"    [✓] 人机验证已完成，继续执行")
+            return True
+
+        # 显示倒计时
+        if remaining % 10 == 0:  # 每10秒打印一次
+            print(f"    [*] 等待验证完成... 剩余 {remaining} 秒")
+
+        time.sleep(check_interval)
+
+    print(f"    [!] 等待人机验证超时 ({timeout}秒)")
     return False
 
 
@@ -275,12 +340,12 @@ def _ask_one_question(page, url: str, question: str, reply_wait: int, on_captcha
 
     # 检查CAPTCHA
     if _check_captcha(page):
-        print("    [!] 检测到人机验证！")
         if on_captcha:
             on_captcha()
-        else:
-            print("    [!] 请在浏览器中手动完成验证，然后按回车继续...")
-            input()
+        # 等待验证完成
+        if not _wait_for_captcha_resolution(page):
+            print("    [!] 人机验证未完成，跳过此问题")
+            return {"answer": "(人机验证未完成)", "citations": []}
 
     _human_like_pause(page, 1.5, 3.0)
 
@@ -531,12 +596,11 @@ def run_doubao_queries(config: dict, questions: list[str], on_captcha=None) -> l
 
             # 检查初始CAPTCHA
             if _check_captcha(page):
-                print("    [!] 检测到人机验证！")
                 if on_captcha:
                     on_captcha()
-                else:
-                    print("    [!] 请在浏览器中手动完成验证，然后按回车继续...")
-                    input()
+                if not _wait_for_captcha_resolution(page):
+                    print("    [!] 初始人机验证未完成，终止执行")
+                    return [{"answer": f"(初始人机验证未完成) {q}", "citations": []} for q in questions]
 
             responses = []
             for i, q in enumerate(questions):
@@ -556,12 +620,14 @@ def run_doubao_queries(config: dict, questions: list[str], on_captcha=None) -> l
 
                 # 每次回答后检查CAPTCHA
                 if _check_captcha(page):
-                    print("    [!] 检测到人机验证！")
                     if on_captcha:
                         on_captcha()
-                    else:
-                        print("    [!] 请在浏览器中手动完成验证，然后按回车继续...")
-                        input()
+                    if not _wait_for_captcha_resolution(page):
+                        print("    [!] 人机验证未完成，跳过后续问题")
+                        # 填充剩余问题的空回答
+                        for _ in range(len(questions) - i - 1):
+                            responses.append({"answer": "(人机验证未完成，跳过)", "citations": []})
+                        break
 
                 if i < len(questions) - 1:
                     min_delay, max_delay = _get_delay_for_question(i, len(questions))

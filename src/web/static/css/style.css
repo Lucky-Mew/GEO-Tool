@@ -313,7 +313,7 @@ header h1 {
 /* 统计卡片 */
 .stats-grid {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(4, 1fr);
     gap: 15px;
     margin-bottom: 12px;
 }
@@ -362,6 +362,136 @@ header h1 {
 
 .charts-row .chart-section {
     margin-bottom: 0;
+}
+
+/* 全宽图表 */
+.chart-section.full-width {
+    width: 100%;
+}
+
+/* 底部并排布局 */
+.charts-row-bottom {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 15px;
+    margin-bottom: 12px;
+}
+
+.charts-row-bottom .chart-section,
+.charts-row-bottom .data-section {
+    margin-bottom: 0;
+    height: 360px;
+    display: flex;
+    flex-direction: column;
+}
+
+.charts-row-bottom .chart-container {
+    flex: 1;
+    min-height: 0;
+}
+
+/* 紧凑的数据区块 */
+.data-section.compact {
+    overflow-y: auto;
+}
+
+.data-section.compact .date-list {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+}
+
+/* 紧凑的日期列表 */
+.date-list.compact {
+    grid-template-columns: 1fr;
+    gap: 6px;
+}
+
+.date-item.compact {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 12px;
+}
+
+.date-item.compact .date-text {
+    font-weight: 600;
+    color: #374151;
+    font-size: 0.9em;
+}
+
+.rate-badge {
+    display: inline-block;
+    padding: 4px 10px;
+    border-radius: 20px;
+    color: white;
+    font-size: 0.8em;
+    font-weight: bold;
+}
+
+/* 全宽图表 */
+.chart-section.full-width {
+    width: 100%;
+}
+
+/* 底部并排布局 */
+.charts-row-bottom {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 15px;
+    margin-bottom: 12px;
+}
+
+.charts-row-bottom .chart-section,
+.charts-row-bottom .data-section {
+    margin-bottom: 0;
+    height: 360px;
+    display: flex;
+    flex-direction: column;
+}
+
+.charts-row-bottom .chart-container {
+    flex: 1;
+    min-height: 0;
+}
+
+/* 紧凑的数据区块 */
+.data-section.compact {
+    overflow-y: auto;
+}
+
+.data-section.compact .date-list {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+}
+
+/* 紧凑的日期列表 */
+.date-list.compact {
+    grid-template-columns: 1fr;
+    gap: 6px;
+}
+
+.date-item.compact {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 12px;
+}
+
+.date-item.compact .date-text {
+    font-weight: 600;
+    color: #374151;
+    font-size: 0.9em;
+}
+
+.rate-badge {
+    display: inline-block;
+    padding: 4px 10px;
+    border-radius: 20px;
+    color: white;
+    font-size: 0.8em;
+    font-weight: bold;
 }
 
 .chart-section h2, .data-section h2, .detail-section h2,
