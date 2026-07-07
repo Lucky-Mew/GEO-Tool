@@ -141,42 +141,45 @@ def _get_delay_for_question(question_index: int, total_questions: int) -> tuple[
 
 
 def _check_captcha(page) -> bool:
-    """检测是否出现人机验证。"""
+    """检测是否出现人机验证（弹窗形式）。"""
     try:
-        # 检测常见的验证元素关键词（去掉了太泛的"验证"）
-        captcha_keywords = [
-            '人机验证', 'captcha', 'Captcha', 'CAPTCHA',
-            '安全验证', '请完成验证', '滑动验证', '点击验证'
-        ]
+        # 先用 JS 快速检查是否有明显的弹窗/遮罩层 + 验证关键词
+        result = page.evaluate("""
+        () => {
+            // 1. 检查是否有模态框/弹窗/遮罩层
+            const hasModal = !!(
+                document.querySelector('div[role="dialog"]') ||
+                document.querySelector('div[class*="modal"]') ||
+                document.querySelector('div[class*="popup"]') ||
+                document.querySelector('div[class*="overlay"]') ||
+                document.querySelector('div[class*="mask"]')
+            );
 
-        # 检查页面文本
-        page_text = page.inner_text('body') or ''
-        found_keyword = False
-        for kw in captcha_keywords:
-            if kw in page_text:
-                found_keyword = True
-                break
+            // 2. 检查页面中是否含验证关键词
+            const text = document.body.innerText || '';
+            const keywords = ['人机验证', 'captcha', 'Captcha', 'CAPTCHA', '安全验证', '请完成验证', '滑动验证', '点击验证'];
+            let hasKeyword = false;
+            for (const kw of keywords) {
+                if (text.includes(kw)) {
+                    hasKeyword = true;
+                    break;
+                }
+            }
 
-        # 检查常见的验证元素
-        captcha_selectors = [
-            'div[class*="captcha"]',
-            'div[class*="verify"]',
-            'div[class*="validation"]',
-            'iframe[src*="captcha"]',
-            'iframe[src*="verify"]'
-        ]
+            // 3. 检查是否有验证相关的 iframe 或元素
+            const hasVerifyElement = !!(
+                document.querySelector('iframe[src*="captcha"]') ||
+                document.querySelector('iframe[src*="verify"]') ||
+                document.querySelector('div[class*="captcha"]') ||
+                document.querySelector('div[class*="verify"]')
+            );
 
-        found_element = False
-        for sel in captcha_selectors:
-            try:
-                if page.query_selector(sel):
-                    found_element = True
-                    break
-            except:
-                pass
+            return { hasModal, hasKeyword, hasVerifyElement };
+        }
+        """)
 
-        # 只有同时找到关键词和元素才认为是 CAPTCHA（降低误判率）
-        if found_keyword and found_element:
+        # 策略：(有模态框 且 有关键词) 或者 (有验证元素) -> 认为是 CAPTCHA
+        if (result['hasModal'] and result['hasKeyword']) or result['hasVerifyElement']:
             return True
 
     except Exception:
@@ -419,7 +422,7 @@ def _ask_one_question(page, url: str, question: str, reply_wait: int, on_captcha
         except Exception:
             pass
 
-    # 自动检测回答完成：检测“停止”按钮是否消失 + 文本长度稳定
+    # 自动检测回答完成：检测"停止"按钮是否消失 + 文本长度稳定
     print(f"    [Q] 等待豆包回答（自动检测完成）...")
 
     last_len = 0
@@ -428,6 +431,14 @@ def _ask_one_question(page, url: str, question: str, reply_wait: int, on_captcha
     max_wait = max(reply_wait, 90)
 
     while waited < max_wait:
+        # 检查是否出现 CAPTCHA
+        if _check_captcha(page):
+            if on_captcha:
+                on_captcha()
+            if not _wait_for_captcha_resolution(page):
+                print("    [!] 人机验证未完成，跳过此问题")
+                return {"answer": "(人机验证未完成)", "citations": []}
+
         try:
             stop_btn = page.query_selector('button:has-text("停止")')
             generating = stop_btn is not None
@@ -660,6 +671,37 @@ def run_doubao_queries(config: dict, questions: list[str], on_captcha=None) -> l
             # 安全打印，避免gbk编码错误
             safe_error = str(e).encode('gbk', errors='replace').decode('gbk')
             print(f"    [!] 执行出错: {safe_error}")
+
+            # 出错时先检查是不是 CAPTCHA，如果是，给用户机会处理
+            try:
+                if page and _check_captcha(page):
+                    print(f"    [!] 检测到可能是人机验证导致的错误")
+                    if on_captcha:
+                        on_captcha()
+                    if _wait_for_captcha_resolution(page, timeout=300):
+                        print(f"    [*] 验证完成，尝试继续执行...")
+                        # 重置 responses，重新开始
+                        responses = []
+                        for i, q in enumerate(questions):
+                            resp = _ask_one_question(page, url, q, reply_wait, on_captcha)
+                            responses.append(resp)
+                            print(f"    [*] 该回答包含 {len(resp['citations'])} 条参考资料")
+                            if i < len(questions) - 1:
+                                min_delay, max_delay = _get_delay_for_question(i, len(questions))
+                                config_delay = doubao_config.get("delay_between_questions")
+                                delay = config_delay if config_delay else random.uniform(min_delay, max_delay)
+                                print(f"    [*] 等待 {delay:.1f} 秒后继续下一个问题...")
+                                start_wait = time.time()
+                                while time.time() - start_wait < delay:
+                                    _human_like_pause(page, 5.0, 10.0)
+                                    if time.time() - start_wait >= delay:
+                                        break
+                        # 执行完成，跳过 finally 的错误返回
+                        return responses
+            except Exception as e2:
+                safe_error2 = str(e2).encode('gbk', errors='replace').decode('gbk')
+                print(f"    [!] 重试失败: {safe_error2}")
+
             return [{"answer": f"(执行出错) {q}", "citations": []} for q in questions]
         finally:
             if should_close_ctx and ctx:
