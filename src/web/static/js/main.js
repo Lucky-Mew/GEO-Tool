@@ -7,6 +7,7 @@ let currentProjectName = '';
 let trendChart = null;
 let positionChart = null;
 let trendStats = [];
+let isProjectManagementMode = false;
 
 // 页面加载
 document.addEventListener('DOMContentLoaded', () => {
@@ -42,21 +43,51 @@ async function loadProjects() {
 function renderProjectList(projects) {
     const container = document.getElementById('projectList');
 
-    if (!projects || projects.length === 0) {
-        container.innerHTML = `
-            <div class="empty-state-small">
-                <p>暂无项目</p>
+    if (isProjectManagementMode) {
+        // 管理模式：显示带删除按钮的项目列表和添加项目卡片
+        let html = '';
+
+        if (projects && projects.length > 0) {
+            html += projects.map(project => `
+                <div class="project-item manage-mode" id="project-${project.id}">
+                    <div class="project-info" onclick="selectProject(${project.id}, '${escapeHtml(project.name)}', '${escapeHtml(project.description)}')">
+                        <div class="project-item-name">${escapeHtml(project.name)}</div>
+                        ${project.description ? `<div class="project-item-desc">${escapeHtml(project.description)}</div>` : ''}
+                    </div>
+                    <button class="btn-delete-project" onclick="deleteProject(event, ${project.id}, '${escapeHtml(project.name)}')" title="删除项目">
+                        🗑️
+                    </button>
+                </div>
+            `).join('');
+        }
+
+        // 添加项目卡片
+        html += `
+            <div class="project-item add-project-card" onclick="showCreateProjectDialog()">
+                <div class="add-project-icon">+</div>
+                <div class="add-project-text">新建项目</div>
             </div>
         `;
-        return;
-    }
 
-    container.innerHTML = projects.map(project => `
-        <div class="project-item" id="project-${project.id}" onclick="selectProject(${project.id}, '${escapeHtml(project.name)}', '${escapeHtml(project.description)}')">
-            <div class="project-item-name">${escapeHtml(project.name)}</div>
-            ${project.description ? `<div class="project-item-desc">${escapeHtml(project.description)}</div>` : ''}
-        </div>
-    `).join('');
+        container.innerHTML = html;
+    } else {
+        // 普通模式：显示正常的项目列表
+        if (!projects || projects.length === 0) {
+            container.innerHTML = `
+                <div class="empty-state-small">
+                    <p>暂无项目</p>
+                </div>
+            `;
+            return;
+        }
+
+        container.innerHTML = projects.map(project => `
+            <div class="project-item" id="project-${project.id}" onclick="selectProject(${project.id}, '${escapeHtml(project.name)}', '${escapeHtml(project.description)}')">
+                <div class="project-item-name">${escapeHtml(project.name)}</div>
+                ${project.description ? `<div class="project-item-desc">${escapeHtml(project.description)}</div>` : ''}
+            </div>
+        `).join('');
+    }
 }
 
 function selectProject(projectId, name, description) {
@@ -94,6 +125,60 @@ function closeCreateProjectDialog() {
     document.getElementById('createProjectModal').style.display = 'none';
 }
 
+function toggleProjectManagement() {
+    isProjectManagementMode = !isProjectManagementMode;
+    const btn = document.getElementById('manage-projects-btn');
+
+    if (isProjectManagementMode) {
+        btn.textContent = '✓ 完成管理';
+        btn.classList.remove('btn-primary');
+        btn.classList.add('btn-success');
+    } else {
+        btn.textContent = '⚙️ 管理项目';
+        btn.classList.remove('btn-success');
+        btn.classList.add('btn-primary');
+    }
+
+    // 重新加载项目列表以更新显示
+    loadProjects();
+}
+
+async function deleteProject(event, projectId, projectName) {
+    event.stopPropagation(); // 防止触发项目选择
+
+    if (!confirm(`确定要删除项目 "${projectName}" 吗？\n\n此操作将删除该项目的所有数据（包括监测任务、历史记录、分析报告等），且无法恢复！`)) {
+        return;
+    }
+
+    try {
+        const response = await fetch(`/api/projects/${projectId}`, {
+            method: 'DELETE'
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            alert('项目已成功删除');
+
+            // 如果删除的是当前选中的项目，清空选择
+            if (currentProjectId === projectId) {
+                currentProjectId = null;
+                currentProjectName = '';
+                document.getElementById('noProjectSelected').style.display = 'flex';
+                document.getElementById('projectContent').style.display = 'none';
+            }
+
+            // 重新加载项目列表
+            loadProjects();
+        } else {
+            alert('删除失败: ' + data.error);
+        }
+    } catch (error) {
+        console.error('删除项目失败:', error);
+        alert('删除项目失败');
+    }
+}
+
 async function createProject() {
     const name = document.getElementById('newProjectName').value.trim();
     const desc = document.getElementById('newProjectDesc').value.trim();
@@ -114,7 +199,9 @@ async function createProject() {
         if (data.success) {
             closeCreateProjectDialog();
             loadProjects();
-            selectProject(data.project_id, name, desc);
+            if (!isProjectManagementMode) {
+                selectProject(data.project_id, name, desc);
+            }
         } else {
             alert('创建失败: ' + data.error);
         }

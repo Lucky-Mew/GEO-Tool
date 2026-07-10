@@ -1315,3 +1315,84 @@ header {
     padding-top: 6px;
     border-top: 1px dashed #d1d5db;
 }
+
+/* ========== 项目管理模式样式 ========== */
+
+.btn-success {
+    background: #10b981;
+    color: white;
+}
+
+.btn-success:hover {
+    background: #059669;
+}
+
+.project-item.manage-mode {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-right: 10px;
+}
+
+.project-item.manage-mode::after {
+    display: none;
+}
+
+.project-info {
+    flex: 1;
+    cursor: pointer;
+    padding: 8px 0;
+}
+
+.btn-delete-project {
+    background: #ef4444;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    width: 32px;
+    height: 32px;
+    font-size: 1em;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+    flex-shrink: 0;
+}
+
+.btn-delete-project:hover {
+    background: #dc2626;
+    transform: scale(1.1);
+}
+
+.add-project-card {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-start;
+    padding: 10px 12px;
+    border: 2px dashed #d1d5db;
+    background: #f9fafb;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.add-project-card:hover {
+    border-color: #667eea;
+    background: #f0f4ff;
+    transform: translateX(3px);
+}
+
+.add-project-icon {
+    font-size: 1.5em;
+    color: #667eea;
+    margin-right: 10px;
+    font-weight: bold;
+}
+
+.add-project-text {
+    color: #667eea;
+    font-weight: 500;
+    font-size: 0.95em;
+}
+
