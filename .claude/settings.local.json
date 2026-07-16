@@ -60,7 +60,16 @@
       "Bash(git commit *)",
       "Bash(git push *)",
       "Bash(PYTHONIOENCODING=utf-8 python *)",
-      "WebFetch(domain:app.aibase.com)"
+      "WebFetch(domain:app.aibase.com)",
+      "Bash(git stash *)",
+      "Bash(git restore *)",
+      "Bash(git checkout *)",
+      "Bash(git reset *)",
+      "Bash(ipconfig)",
+      "Bash(findstr \"IPv4\")",
+      "Bash(del *)",
+      "Bash(findstr python *)",
+      "Bash(taskkill *)"
     ]
   },
   "statusLine": {

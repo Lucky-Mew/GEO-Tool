@@ -1036,6 +1036,607 @@ def api_continue():
     return jsonify({'success': True})
 
 
+# ============================================================================
+# GEO 优化 API
+# ============================================================================
+
+@app.route('/api/geo/keywords', methods=['GET'])
+def api_geo_get_keywords():
+    """获取关键词库（支持分页）"""
+    from src.geo import KeywordManager
+    project_id = request.args.get('project_id', type=int)
+    tier = request.args.get('tier')
+    page = request.args.get('page', 1, type=int)
+    page_size = request.args.get('page_size', 5, type=int)
+    km = KeywordManager()
+    # 获取所有关键词
+    all_keywords = km.get_keywords(project_id, tier=tier)
+    # 分页
+    total = len(all_keywords)
+    start = (page - 1) * page_size
+    end = start + page_size
+    keywords = all_keywords[start:end]
+    total_pages = (total + page_size - 1) // page_size if total > 0 else 1
+    stats = km.get_tier_stats(project_id)
+    return jsonify({
+        'success': True,
+        'keywords': keywords,
+        'stats': stats,
+        'pagination': {
+            'page': page,
+            'page_size': page_size,
+            'total': total,
+            'total_pages': total_pages
+        }
+    })
+
+
+@app.route('/api/geo/keywords', methods=['POST'])
+def api_geo_add_keyword():
+    """添加关键词"""
+    from src.geo import KeywordManager
+    data = request.json
+    km = KeywordManager()
+    kw_id = km.add_keyword(
+        data.get('project_id'),
+        data.get('keyword'),
+        data.get('tier'),
+        data.get('difficulty', 50),
+        data.get('is_target', False),
+        data.get('notes')
+    )
+    return jsonify({'success': True, 'id': kw_id})
+
+
+@app.route('/api/geo/keywords/batch', methods=['POST'])
+def api_geo_batch_keywords():
+    """批量添加关键词"""
+    from src.geo import KeywordManager
+    data = request.json
+    km = KeywordManager()
+    ids = km.batch_add_keywords(data.get('project_id'), data.get('keywords', []))
+    return jsonify({'success': True, 'ids': ids})
+
+
+@app.route('/api/geo/keywords/generate', methods=['POST'])
+def api_geo_generate_keywords():
+    """生成关键词建议（模板方式）"""
+    from src.geo import KeywordManager
+    data = request.json
+    km = KeywordManager()
+    suggestions = km.generate_suggestions(
+        data.get('project_id'),
+        data.get('brand_name'),
+        data.get('core_product'),
+        data.get('competitors', [])
+    )
+    return jsonify({'success': True, 'suggestions': suggestions})
+
+
+@app.route('/api/geo/keywords/check-docs', methods=['GET'])
+def api_geo_check_docs():
+    """检查项目是否有文档"""
+    from src.geo import KeywordManager
+    project_id = request.args.get('project_id', type=int)
+    km = KeywordManager()
+    has_docs = km.has_documents(project_id)
+    return jsonify({'success': True, 'has_documents': has_docs})
+
+
+@app.route('/api/geo/keywords/generate-from-docs', methods=['POST'])
+def api_geo_generate_keywords_from_docs():
+    """基于文档库智能挖掘关键词"""
+    from src.geo import KeywordManager
+    from src.config import load_config
+    from src.collector.monitor_analysis import _call_llm
+
+    data = request.json
+    project_id = data.get('project_id')
+
+    km = KeywordManager()
+
+    # 检查是否有文档
+    if not km.has_documents(project_id):
+        return jsonify({'success': False, 'error': '文档库为空，请先上传文档'}), 400
+
+    # 加载配置
+    config = load_config()
+
+    # 智能挖掘
+    suggestions = km.generate_suggestions_from_docs(
+        project_id,
+        _call_llm,
+        config
+    )
+
+    return jsonify({'success': True, 'suggestions': suggestions})
+
+
+@app.route('/api/geo/keywords/<int:kw_id>', methods=['PUT'])
+def api_geo_update_keyword(kw_id):
+    """更新关键词"""
+    from src.geo import KeywordManager
+    data = request.json
+    km = KeywordManager()
+    km.update_keyword(kw_id, **data)
+    return jsonify({'success': True})
+
+
+@app.route('/api/geo/keywords/<int:kw_id>', methods=['DELETE'])
+def api_geo_delete_keyword(kw_id):
+    """删除关键词"""
+    from src.geo import KeywordManager
+    km = KeywordManager()
+    km.delete_keyword(kw_id)
+    return jsonify({'success': True})
+
+
+@app.route('/api/geo/content/check', methods=['POST'])
+def api_geo_check_content():
+    """检查内容GEO规范"""
+    from src.geo import ContentTemplate
+    data = request.json
+    content = data.get('content', '')
+    passed, issues = ContentTemplate.check_geo_standards(content)
+    checklist = ContentTemplate.get_content_template_checklist()
+    return jsonify({'success': True, 'passed': passed, 'issues': issues, 'checklist': checklist})
+
+
+@app.route('/api/geo/content/generate', methods=['POST'])
+def api_geo_generate_content():
+    """生成内容"""
+    from src.geo import ContentTemplate
+    from src.geo import DocumentProcessor
+    from src.geo import RetrievalEngine
+    from src.config import load_config
+    from src.collector.monitor_analysis import _call_llm
+
+    data = request.json
+    content_type = data.get('type', 'longtail')
+    question = data.get('question', '')
+    brand_name = data.get('brand_name', '')
+    project_id = data.get('project_id')
+
+    # 1. 检索相关素材
+    materials = []
+    context_text = ''
+    if project_id:
+        dp = DocumentProcessor()
+        re = RetrievalEngine()
+        chunks = dp.get_all_chunks_for_project(project_id)
+        if chunks:
+            # 获取摘要一起检索
+            summaries = dp.get_summaries(project_id)
+            # 构建索引并检索
+            re.index_chunks(chunks)
+            results = re.search(question, top_k=5, summaries=summaries)
+            if results:
+                materials = [{'source': r.get('source', ''), 'content': r.get('content', '')} for r in results]
+                context_text = '\n\n'.join([r.get('content', '') for r in results])
+
+    # 2. 调用LLM生成完整内容
+    config = load_config()
+    if content_type == 'longtail':
+        content = ContentTemplate.longtail_question_template_llm(
+            question,
+            context_text,
+            materials,
+            brand_name,
+            config,
+            _call_llm
+        )
+    elif content_type == 'comparison':
+        content = ContentTemplate.comparison_template_llm(
+            question,
+            context_text,
+            brand_name,
+            config,
+            _call_llm
+        )
+    else:
+        content = ContentTemplate.core_deep_template_llm(
+            question,
+            context_text,
+            brand_name,
+            config,
+            _call_llm
+        )
+
+    return jsonify({'success': True, 'content': content})
+
+
+# ========== 文档管理 API ==========
+
+@app.route('/api/geo/documents', methods=['GET'])
+def api_geo_get_documents():
+    """获取文档列表"""
+    from src.geo import DocumentProcessor
+    project_id = request.args.get('project_id', type=int)
+    tag = request.args.get('tag')
+    dp = DocumentProcessor()
+    documents = dp.get_documents(project_id, tag=tag)
+    summaries = dp.get_summaries(project_id)
+    return jsonify({'success': True, 'documents': documents, 'summaries': summaries})
+
+
+@app.route('/api/geo/documents', methods=['POST'])
+def api_geo_upload_document():
+    """上传文档"""
+    from src.geo import DocumentProcessor
+    from src.config import get_document_storage_dir
+
+    if 'file' not in request.files:
+        return jsonify({'success': False, 'error': '没有文件'}), 400
+
+    file = request.files['file']
+    if not file.filename:
+        return jsonify({'success': False, 'error': '没有选择文件'}), 400
+
+    project_id = request.form.get('project_id', type=int)
+    tags = request.form.get('tags', '')
+
+    dp = DocumentProcessor()
+    file_type = dp.detect_file_type(file.filename)
+
+    if not file_type:
+        return jsonify({'success': False, 'error': '不支持的文件格式'}), 400
+
+    # 保存文件
+    storage_dir = get_document_storage_dir(project_id)
+    import time
+    safe_filename = f"{int(time.time())}_{file.filename}"
+    storage_path = storage_dir / safe_filename
+
+    file.save(str(storage_path))
+    file_size = storage_path.stat().st_size
+
+    # 保存数据库记录
+    doc_id = dp.save_document(
+        project_id=project_id,
+        original_filename=file.filename,
+        storage_path=str(storage_path),
+        file_type=file_type,
+        file_size=file_size,
+        tags=tags
+    )
+
+    # 解析文档
+    try:
+        content, word_count = dp.parse_document(str(storage_path), file_type)
+        dp.update_document_parsed(doc_id, content, word_count)
+
+        # 切分片段
+        chunks = dp.split_into_chunks(content)
+        dp.save_chunks(doc_id, chunks)
+
+        return jsonify({'success': True, 'id': doc_id, 'word_count': word_count, 'chunks': len(chunks)})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/geo/documents/<int:doc_id>', methods=['GET'])
+def api_geo_get_document(doc_id):
+    """获取单个文档详情"""
+    from src.geo import DocumentProcessor
+    dp = DocumentProcessor()
+    doc = dp.get_document(doc_id)
+    if not doc:
+        return jsonify({'success': False, 'error': '文档不存在'}), 404
+
+    chunks = dp.get_document_chunks(doc_id)
+
+    # 优先用数据库里已经解析好的片段拼接
+    full_content = None
+    if chunks and len(chunks) > 0:
+        full_content = '\n'.join([chunk['content'] for chunk in chunks])
+    else:
+        # 如果没有片段，尝试读取原始文件
+        try:
+            from pathlib import Path
+            path = Path(doc['storage_path'])
+            if path.exists():
+                if doc['file_type'] in ['text', 'markdown']:
+                    try:
+                        full_content = path.read_text(encoding='utf-8')
+                    except UnicodeDecodeError:
+                        full_content = path.read_text(encoding='gbk', errors='ignore')
+                elif doc['file_type'] in ['word', 'pdf', 'powerpoint']:
+                    # 对于Word/PDF/PPT，用parse_document重新解析
+                    try:
+                        content, _ = dp.parse_document(str(path), doc['file_type'])
+                        full_content = content
+                    except Exception:
+                        pass
+        except Exception:
+            pass
+
+    return jsonify({'success': True, 'document': doc, 'chunks': chunks, 'full_content': full_content})
+
+
+@app.route('/api/geo/documents/<int:doc_id>/generate-summary', methods=['POST'])
+def api_geo_generate_doc_summary(doc_id):
+    """为文档自动生成摘要"""
+    from src.geo import DocumentProcessor
+    from src.config import load_config
+    from src.collector.monitor_analysis import _call_llm
+
+    dp = DocumentProcessor()
+    doc = dp.get_document(doc_id)
+    if not doc:
+        return jsonify({'success': False, 'error': '文档不存在'}), 404
+
+    # 获取文档内容
+    chunks = dp.get_document_chunks(doc_id)
+    full_content = None
+    if chunks and len(chunks) > 0:
+        full_content = '\n'.join([chunk['content'] for chunk in chunks])
+    else:
+        try:
+            from pathlib import Path
+            path = Path(doc['storage_path'])
+            if path.exists():
+                if doc['file_type'] in ['text', 'markdown']:
+                    try:
+                        full_content = path.read_text(encoding='utf-8')
+                    except UnicodeDecodeError:
+                        full_content = path.read_text(encoding='gbk', errors='ignore')
+                elif doc['file_type'] in ['word', 'pdf', 'powerpoint']:
+                    try:
+                        content, _ = dp.parse_document(str(path), doc['file_type'])
+                        full_content = content
+                    except Exception:
+                        pass
+        except Exception:
+            pass
+
+    if not full_content or not full_content.strip():
+        return jsonify({'success': False, 'error': '文档内容为空，无法生成摘要'}), 400
+
+    # 截取前3000字避免太长
+    if len(full_content) > 3000:
+        full_content = full_content[:3000] + '...（内容太长，已截取）'
+
+    # 调用LLM生成摘要
+    config = load_config()
+    prompt = f"""请阅读以下文档内容，提取关键信息生成摘要。
+
+文档名称：{doc['original_filename']}
+文档内容：
+{full_content}
+
+请生成该文档的摘要，要求：
+1. 标题要简明扼要，概括文档主题
+2. 内容要提取核心要点，突出关键信息
+3. 用中文输出
+4. 格式如下：
+标题：[简短标题]
+摘要：[核心要点摘要，200-500字]
+
+直接输出结果，不要其他解释。"""
+
+    try:
+        result = _call_llm(config, prompt)
+        # 解析返回结果
+        title = doc['original_filename']
+        summary = result
+        if '标题：' in result and '摘要：' in result:
+            parts = result.split('摘要：', 1)
+            title_part = parts[0].replace('标题：', '').strip()
+            if title_part:
+                title = title_part
+            summary = parts[1].strip()
+        return jsonify({'success': True, 'title': title, 'content': summary})
+    except Exception as e:
+        return jsonify({'success': False, 'error': f'生成摘要失败：{str(e)}'}), 500
+
+
+@app.route('/api/geo/documents/<int:doc_id>', methods=['DELETE'])
+def api_geo_delete_document(doc_id):
+    """删除文档"""
+    from src.geo import DocumentProcessor
+    dp = DocumentProcessor()
+    doc = dp.get_document(doc_id)
+
+    if not doc:
+        return jsonify({'success': False, 'error': '文档不存在'}), 404
+
+    # 删除文件
+    try:
+        from pathlib import Path
+        path = Path(doc['storage_path'])
+        if path.exists():
+            path.unlink()
+    except Exception:
+        pass
+
+    dp.delete_document(doc_id)
+    return jsonify({'success': True})
+
+
+@app.route('/api/geo/summaries', methods=['POST'])
+def api_geo_create_summary():
+    """创建摘要"""
+    from src.geo import DocumentProcessor
+    data = request.json
+    dp = DocumentProcessor()
+    summary_id = dp.save_summary(
+        project_id=data.get('project_id'),
+        summary_level=data.get('level', 'document'),
+        target_id=data.get('target_id'),
+        title=data.get('title', ''),
+        content=data.get('content', ''),
+        is_manual_edit=data.get('is_manual', False)
+    )
+    return jsonify({'success': True, 'id': summary_id})
+
+
+@app.route('/api/geo/summaries/<int:summary_id>', methods=['PUT'])
+def api_geo_update_summary(summary_id):
+    """更新摘要"""
+    from src.geo import DocumentProcessor
+    data = request.json
+    dp = DocumentProcessor()
+    dp.update_summary(summary_id, data.get('content', ''), data.get('is_manual', False))
+    return jsonify({'success': True})
+
+
+@app.route('/api/geo/summaries/<int:summary_id>', methods=['DELETE'])
+def api_geo_delete_summary(summary_id):
+    """删除摘要"""
+    from src.geo import DocumentProcessor
+    dp = DocumentProcessor()
+    dp.delete_summary(summary_id)
+    return jsonify({'success': True})
+
+
+@app.route('/api/geo/retrieve', methods=['POST'])
+def api_geo_retrieve():
+    """检索相关素材"""
+    from src.geo import DocumentProcessor, RetrievalEngine, build_context_for_generation
+    data = request.json
+    query = data.get('query', '')
+    project_id = data.get('project_id', type=int)
+
+    dp = DocumentProcessor()
+
+    # 获取文档库的摘要和片段
+    summaries = dp.get_summaries(project_id)
+    chunks = dp.get_all_chunks_for_project(project_id)
+
+    # 检索
+    engine = RetrievalEngine()
+    engine.index_chunks(chunks)
+    results = engine.search(query, top_k=8, summaries=summaries)
+
+    # 构建上下文
+    context = build_context_for_generation(results)
+
+    return jsonify({'success': True, 'results': results, 'context': context})
+
+
+@app.route('/api/geo/hits', methods=['GET'])
+def api_geo_get_hits():
+    """获取命中记录"""
+    from src.geo import HitTracker
+    project_id = request.args.get('project_id', type=int)
+    days = request.args.get('days', 30, type=int)
+    ht = HitTracker()
+    records = ht.get_hit_records(project_id, days=days)
+    hit_rate = ht.get_hit_rate(project_id, days=days)
+    tier_rates = ht.get_tier_hit_rates(project_id, days=days)
+    position_dist = ht.get_position_distribution(project_id, days=days)
+    return jsonify({
+        'success': True,
+        'records': records,
+        'hit_rate': hit_rate,
+        'tier_rates': tier_rates,
+        'position_dist': position_dist
+    })
+
+
+@app.route('/api/geo/hits', methods=['POST'])
+def api_geo_add_hit():
+    """记录命中"""
+    from src.geo import HitTracker
+    data = request.json
+    ht = HitTracker()
+    record_id = ht.record_hit(
+        data.get('project_id'),
+        data.get('keyword_id'),
+        data.get('keyword'),
+        data.get('is_hit', False),
+        data.get('position'),
+        data.get('mention_count', 0),
+        data.get('cited_sources'),
+        data.get('response_snippet')
+    )
+    return jsonify({'success': True, 'id': record_id})
+
+
+@app.route('/api/geo/plan', methods=['GET'])
+def api_geo_get_plan():
+    """获取执行计划"""
+    from src.geo import PlanManager
+    project_id = request.args.get('project_id', type=int)
+    pm = PlanManager()
+    plan = pm.get_plan(project_id)
+    progress = pm.get_progress_summary(project_id)
+    return jsonify({'success': True, 'plan': plan, 'progress': progress})
+
+
+@app.route('/api/geo/plan', methods=['POST'])
+def api_geo_create_plan():
+    """创建8周计划"""
+    from src.geo import PlanManager
+    data = request.json
+    pm = PlanManager()
+    ids = pm.create_8week_plan(data.get('project_id'), data.get('start_date'))
+    return jsonify({'success': True, 'ids': ids})
+
+
+@app.route('/api/geo/plan/<int:plan_id>', methods=['PUT'])
+def api_geo_update_plan(plan_id):
+    """更新计划项"""
+    from src.geo import PlanManager
+    data = request.json
+    pm = PlanManager()
+    pm.update_plan_item(plan_id, **data)
+    return jsonify({'success': True})
+
+
+@app.route('/api/geo/competitors', methods=['GET'])
+def api_geo_get_competitors():
+    """获取竞品列表"""
+    from src.geo import CompetitorAnalyzer
+    project_id = request.args.get('project_id', type=int)
+    ca = CompetitorAnalyzer()
+    competitors = ca.get_competitors(project_id)
+    citations = ca.get_competitor_citations(project_id)
+    gap = ca.get_gap_analysis(project_id)
+    return jsonify({'success': True, 'competitors': competitors, 'citations': citations, 'gap': gap})
+
+
+@app.route('/api/geo/competitors', methods=['POST'])
+def api_geo_add_competitor():
+    """添加竞品"""
+    from src.geo import CompetitorAnalyzer
+    data = request.json
+    ca = CompetitorAnalyzer()
+    comp_id = ca.add_competitor(
+        data.get('project_id'),
+        data.get('name'),
+        data.get('url'),
+        data.get('notes')
+    )
+    return jsonify({'success': True, 'id': comp_id})
+
+
+@app.route('/api/geo/competitors/<int:comp_id>', methods=['DELETE'])
+def api_geo_delete_competitor(comp_id):
+    """删除竞品"""
+    from src.geo import CompetitorAnalyzer
+    ca = CompetitorAnalyzer()
+    ca.delete_competitor(comp_id)
+    return jsonify({'success': True})
+
+
+@app.route('/geo/competitors/<int:comp_id>/citations', methods=['POST'])
+def api_geo_add_citation(comp_id):
+    """添加竞品引用记录"""
+    from src.geo import CompetitorAnalyzer
+    data = request.json
+    ca = CompetitorAnalyzer()
+    cit_id = ca.add_citation(
+        data.get('project_id'),
+        comp_id,
+        data.get('keyword'),
+        data.get('cited_content'),
+        data.get('content_structure'),
+        data.get('source_url')
+    )
+    return jsonify({'success': True, 'id': cit_id})
+
+
 @app.route('/static/<path:path>')
 def static_files(path):
     """静态文件服务"""

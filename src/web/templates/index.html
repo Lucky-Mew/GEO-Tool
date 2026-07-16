@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>GEO 品牌监测仪表盘</title>
-    <link rel="stylesheet" href="/static/css/style.css?v=12">
+    <link rel="stylesheet" href="/static/css/style.css?v=14">
 </head>
 <body>
     <div class="container">
@@ -48,6 +48,7 @@
                         <button class="nav-btn active" onclick="showView('control')">▶️ 任务控制</button>
                         <button class="nav-btn" onclick="showView('dashboard')">📈 仪表盘</button>
                         <button class="nav-btn" onclick="showView('files')">📁 文件浏览</button>
+                        <button class="nav-btn geo-btn" onclick="showView('geo')">🎯 GEO优化</button>
                     </nav>
 
                     <!-- 任务控制视图 -->
@@ -178,6 +179,133 @@
                                 <div id="answersList"></div>
                             </div>
                         </section>
+                    </div>
+
+                    <!-- GEO优化视图 -->
+                    <div id="geoView" class="view">
+                        <!-- GEO子导航 -->
+                        <nav class="geo-subnav">
+                            <button class="geo-nav-btn active" onclick="showGeoView('documents')">📚 文档库</button>
+                            <button class="geo-nav-btn" onclick="showGeoView('keywords')">🔑 关键词库</button>
+                            <button class="geo-nav-btn" onclick="showGeoView('content')">✍️ 内容生产</button>
+                            <button class="geo-nav-btn" onclick="showGeoView('competitors')">🏆 竞品分析</button>
+                        </nav>
+
+                        <!-- 关键词库视图 -->
+                        <div id="geoKeywordsView" class="geo-subview" style="display: none;">
+                            <div class="geo-section-header">
+                                <h3>🔑 关键词库</h3>
+                                <div style="display: flex; gap: 8px;">
+                                    <button class="btn-small btn-primary" onclick="openKeywordGenModal()">✨ 自动生成</button>
+                                    <button class="btn-small btn-secondary" onclick="openAddKeywordModal()">+ 添加关键词</button>
+                                </div>
+                            </div>
+                            <div id="geoKeywordStats" class="stats-grid" style="margin-bottom: 16px;"></div>
+                            <div class="geo-tab-bar">
+                                <button class="geo-tab active" onclick="filterKeywords('all')">全部</button>
+                                <button class="geo-tab" onclick="filterKeywords('brand')">品牌词</button>
+                                <button class="geo-tab" onclick="filterKeywords('accurate')">精准词</button>
+                                <button class="geo-tab" onclick="filterKeywords('generic')">大词</button>
+                                <button class="geo-tab" onclick="filterKeywords('scene')">场景词</button>
+                            </div>
+                            <div id="geoKeywordList" class="geo-list"></div>
+                            <div id="geoKeywordPagination"></div>
+                        </div>
+
+                        <!-- 文档库视图 -->
+                        <div id="geoDocumentsView" class="geo-subview">
+                            <div class="geo-section-header">
+                                <h3>📚 智能文档库</h3>
+                                <button class="btn-small btn-primary" onclick="openUploadDocumentModal()">📤 上传文档</button>
+                            </div>
+                            <div id="geoDocumentTagBar" class="geo-tab-bar" style="flex-wrap: wrap;">
+                                <button class="geo-tab active" onclick="filterDocuments('all')">全部</button>
+                            </div>
+                            <div id="geoDocumentList" class="geo-list" style="margin-bottom: 16px;"></div>
+                            <h4 style="margin: 16px 0 8px;">📝 摘要管理</h4>
+                            <div style="margin-bottom: 12px;">
+                                <button class="btn-small btn-secondary" onclick="openCreateSummaryModal('document')">+ 文档摘要</button>
+                                <button class="btn-small btn-secondary" onclick="openCreateSummaryModal('category')">+ 分类摘要</button>
+                            </div>
+                            <div id="geoSummaryList" class="geo-list"></div>
+                        </div>
+
+                        <!-- 内容生产视图 -->
+                        <div id="geoContentView" class="geo-subview" style="display: none;">
+                            <div class="geo-section-header">
+                                <h3>✍️ 内容生产助手</h3>
+                            </div>
+                            <div class="geo-content-editor">
+                                <div class="form-group">
+                                    <label>内容类型</label>
+                                    <select id="geoContentType" class="form-input">
+                                        <option value="longtail">长尾问答文</option>
+                                        <option value="comparison">横向对比文</option>
+                                        <option value="core">核心深度文</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label>问题</label>
+                                    <div style="display: flex; gap: 8px;">
+                                        <input type="text" id="geoContentTitle" class="form-input" placeholder="选择或输入问题">
+                                        <button class="btn-small btn-secondary" onclick="openKeywordSelector()">📋 选择关键词</button>
+                                    </div>
+                                </div>
+                                <div class="form-group">
+                                    <label>品牌名</label>
+                                    <input type="text" id="geoContentBrand" class="form-input" placeholder="例如: 完形康躰">
+                                </div>
+                                <div style="margin-bottom:16px;">
+                                    <button class="report-btn" onclick="generateGEOContent()">✨ 生成内容</button>
+                                </div>
+                                <hr style="margin: 16px 0;">
+                                <h4>📝 内容预览</h4>
+                                <textarea id="geoContentPreview" class="form-input" rows="15" style="font-family: monospace; font-size: 0.9em;"></textarea>
+                                <div style="margin-top: 12px;">
+                                    <button class="btn-small btn-secondary" onclick="checkGeoContent()">🔍 检查GEO规范</button>
+                                    <div id="geoCheckResult" style="margin-top: 10px;"></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 关键词选择器弹窗 -->
+                        <div id="keywordSelectorModal" class="modal" style="display: none;">
+                            <div class="modal-content modal-large">
+                                <div class="modal-header">
+                                    <h3>📋 选择关键词</h3>
+                                    <button class="modal-close" onclick="closeKeywordSelector()">&times;</button>
+                                </div>
+                                <div class="modal-body">
+                                    <div class="form-group">
+                                        <input type="text" id="keywordSelectorSearch" class="form-input" placeholder="搜索关键词..." oninput="filterKeywordSelector()">
+                                    </div>
+                                    <div class="geo-tab-bar" id="keywordSelectorTabs" style="flex-wrap: wrap; margin-bottom: 16px;">
+                                        <button class="geo-tab active" onclick="filterKeywordSelectorByTier('all')">全部</button>
+                                        <button class="geo-tab" onclick="filterKeywordSelectorByTier('brand')">品牌词</button>
+                                        <button class="geo-tab" onclick="filterKeywordSelectorByTier('accurate')">精准词</button>
+                                        <button class="geo-tab" onclick="filterKeywordSelectorByTier('generic')">大词</button>
+                                        <button class="geo-tab" onclick="filterKeywordSelectorByTier('scene')">场景词</button>
+                                    </div>
+                                    <div id="keywordSelectorList" class="geo-list" style="max-height: 400px; overflow-y: auto;"></div>
+                                </div>
+                                <div class="modal-footer">
+                                    <button class="btn-cancel" onclick="closeKeywordSelector()">取消</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 竞品分析视图 -->
+                        <div id="geoCompetitorsView" class="geo-subview" style="display: none;">
+                            <div class="geo-section-header">
+                                <h3>🏆 竞品分析</h3>
+                                <button class="btn-small btn-primary" onclick="openAddCompetitorModal()">+ 添加竞品</button>
+                            </div>
+                            <div id="geoCompetitorList" class="geo-list" style="margin-bottom: 16px;"></div>
+                            <section class="data-section">
+                                <h4>🔍 空白分析</h4>
+                                <div id="geoGapAnalysis"></div>
+                            </section>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -314,10 +442,198 @@
         </div>
     </div>
 
+    <!-- 添加关键词弹窗 -->
+    <div id="addKeywordModal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>添加关键词</h3>
+                <button class="modal-close" onclick="closeAddKeywordModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>关键词:</label>
+                    <input type="text" id="newKeywordText" class="form-input" placeholder="例如: 康躰脂雕多少钱">
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>层级:</label>
+                        <select id="newKeywordTier" class="form-input">
+                            <option value="brand">品牌词</option>
+                            <option value="accurate">精准词</option>
+                            <option value="generic">大词</option>
+                            <option value="scene">场景词</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>难度(0-100):</label>
+                        <input type="number" id="newKeywordDifficulty" class="form-input" value="50" min="0" max="100">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label style="display: flex; align-items: center; gap: 8px;">
+                        <input type="checkbox" id="newKeywordIsTarget">
+                        是否核心目标词
+                    </label>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-cancel" onclick="closeAddKeywordModal()">取消</button>
+                <button class="btn-save" onclick="saveKeyword()">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 关键词生成弹窗 -->
+    <div id="keywordGenModal" class="modal" style="display: none;">
+        <div class="modal-content modal-large">
+            <div class="modal-header">
+                <h3>✨ 基于文档生成关键词</h3>
+                <button class="modal-close" onclick="closeKeywordGenModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <!-- 文档库为空提示 -->
+                <div id="docEmptyAlert" class="captcha-alert" style="margin-bottom: 16px; display: none;">
+                    <div class="captcha-alert-title">📚 文档库为空</div>
+                    <div class="captcha-alert-text">请先上传品牌资料文档，才能基于内容生成关键词</div>
+                    <div style="margin-top: 10px;">
+                        <button class="btn-small btn-primary" onclick="closeKeywordGenModal(); showGeoView('documents')">📤 去上传文档</button>
+                    </div>
+                </div>
+
+                <!-- 智能挖掘模式 -->
+                <div id="genSmartView">
+                    <div style="padding: 16px; background: #f0f9ff; border-radius: 8px; margin-bottom: 16px;">
+                        <p style="margin: 0 0 8px 0; color: #0369a1;"><strong>🤖 智能挖掘说明</strong></p>
+                        <p style="margin: 0; color: #666; font-size: 0.9em;">将分析文档库中的内容，自动挖掘贴合品牌业务的关键词</p>
+                    </div>
+                    <div id="smartGenStatus" style="text-align: center; padding: 20px;"></div>
+                </div>
+
+                <!-- 生成结果预览 -->
+                <div id="genResultPreview" style="display: none; margin-top: 16px;">
+                    <h4 style="margin-bottom: 8px;">📋 生成结果预览</h4>
+                    <div id="genResultContent" style="max-height: 300px; overflow-y: auto; padding: 12px; background: #f8f9fa; border-radius: 6px;"></div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-cancel" onclick="closeKeywordGenModal()">取消</button>
+                <button id="genBtnSmart" class="btn-save" onclick="generateKeywords()">开始挖掘</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 上传文档弹窗 -->
+    <div id="uploadDocumentModal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>📤 上传文档</h3>
+                <button class="modal-close" onclick="closeUploadDocumentModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>选择文件:</label>
+                    <input type="file" id="documentFile" class="form-input" accept=".txt,.md,.docx,.pdf,.pptx">
+                    <small style="color: #666;">支持: TXT, MD, DOCX, PDF, PPTX</small>
+                </div>
+                <div class="form-group">
+                    <label>标签(可选，多个用逗号分隔):</label>
+                    <input type="text" id="newDocTags" class="form-input" placeholder="例如: 品牌,案例,技术">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-cancel" onclick="closeUploadDocumentModal()">取消</button>
+                <button class="btn-save" onclick="uploadDocument()">上传</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 创建摘要弹窗 -->
+    <div id="createSummaryModal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>📝 创建摘要</h3>
+                <button class="modal-close" onclick="closeCreateSummaryModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>摘要类型:</label>
+                    <select id="summaryLevel" class="form-input" onchange="updateSummaryTarget()">
+                        <option value="document">文档摘要</option>
+                        <option value="category">分类摘要</option>
+                        <option value="global">全局摘要</option>
+                    </select>
+                </div>
+                <div class="form-group" id="summaryTargetGroup">
+                    <label>关联文档:</label>
+                    <div style="display: flex; gap: 8px;">
+                        <select id="summaryTargetId" class="form-input" style="flex: 1;"></select>
+                        <button class="btn-small btn-secondary" onclick="generateSummary()">✨ 自动生成</button>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>标题:</label>
+                    <input type="text" id="summaryTitle" class="form-input" placeholder="简短标题">
+                </div>
+                <div class="form-group">
+                    <label>摘要内容:</label>
+                    <textarea id="summaryContent" class="form-input" rows="6" placeholder="核心要点摘要"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-cancel" onclick="closeCreateSummaryModal()">取消</button>
+                <button class="btn-save" onclick="saveSummary()">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 查看文档弹窗 -->
+    <div id="viewDocumentModal" class="modal" style="display: none;">
+        <div class="modal-content" style="max-width: 800px; width: 90%;">
+            <div class="modal-header">
+                <h3 id="viewDocTitle">📄 查看文档</h3>
+                <button class="modal-close" onclick="closeViewDocumentModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div id="viewDocContent" style="max-height: 500px; overflow-y: auto; white-space: pre-wrap; line-height: 1.6; padding: 10px; background: #f9f9f9; border-radius: 6px;"></div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-cancel" onclick="closeViewDocumentModal()">关闭</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 添加竞品弹窗 -->
+    <div id="addCompetitorModal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>添加竞品</h3>
+                <button class="modal-close" onclick="closeAddCompetitorModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>竞品名称:</label>
+                    <input type="text" id="newCompetitorName" class="form-input" placeholder="例如: 竞品A">
+                </div>
+                <div class="form-group">
+                    <label>链接(可选):</label>
+                    <input type="text" id="newCompetitorUrl" class="form-input" placeholder="竞品官网">
+                </div>
+                <div class="form-group">
+                    <label>备注(可选):</label>
+                    <input type="text" id="newCompetitorNotes" class="form-input" placeholder="备注信息">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-cancel" onclick="closeAddCompetitorModal()">取消</button>
+                <button class="btn-save" onclick="saveCompetitor()">保存</button>
+            </div>
+        </div>
+    </div>
+
     <!-- ECharts -->
     <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
     <!-- Marked.js for Markdown rendering -->
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-    <script src="/static/js/main.js?v=2"></script>
+    <script src="/static/js/main.js?v=15"></script>
 </body>
 </html>

@@ -84,6 +84,181 @@ def init_db():
         )
     ''')
 
+    # ========== GEO优化表 ==========
+
+    # 关键词库表
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS geo_keywords (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            project_id INTEGER,
+            keyword TEXT NOT NULL,
+            tier TEXT NOT NULL,
+            difficulty INTEGER DEFAULT 50,
+            status TEXT DEFAULT 'pending',
+            is_target INTEGER DEFAULT 0,
+            notes TEXT,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (project_id) REFERENCES projects (id)
+        )
+    ''')
+
+    # 独有信息素材库表
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS geo_materials (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            project_id INTEGER,
+            category TEXT NOT NULL,
+            title TEXT NOT NULL,
+            content TEXT NOT NULL,
+            source TEXT,
+            use_cases TEXT,
+            is_verified INTEGER DEFAULT 1,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (project_id) REFERENCES projects (id)
+        )
+    ''')
+
+    # 内容清单表
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS geo_contents (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            project_id INTEGER,
+            title TEXT NOT NULL,
+            content_type TEXT NOT NULL,
+            target_keywords TEXT,
+            status TEXT DEFAULT 'idea',
+            publish_url TEXT,
+            publish_platform TEXT,
+            publish_date TEXT,
+            word_count INTEGER DEFAULT 0,
+            has_table INTEGER DEFAULT 0,
+            has_data INTEGER DEFAULT 0,
+            notes TEXT,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (project_id) REFERENCES projects (id)
+        )
+    ''')
+
+    # 关键词命中记录表
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS geo_hit_records (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            project_id INTEGER,
+            keyword_id INTEGER,
+            keyword TEXT NOT NULL,
+            date_str TEXT NOT NULL,
+            hour INTEGER,
+            is_hit INTEGER DEFAULT 0,
+            position TEXT,
+            mention_count INTEGER DEFAULT 0,
+            cited_sources TEXT,
+            response_snippet TEXT,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (project_id) REFERENCES projects (id),
+            FOREIGN KEY (keyword_id) REFERENCES geo_keywords (id)
+        )
+    ''')
+
+    # 竞品分析表
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS geo_competitors (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            project_id INTEGER,
+            name TEXT NOT NULL,
+            url TEXT,
+            notes TEXT,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (project_id) REFERENCES projects (id)
+        )
+    ''')
+
+    # 竞品内容引用表
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS geo_competitor_citations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            project_id INTEGER,
+            competitor_id INTEGER,
+            keyword TEXT,
+            cited_content TEXT,
+            content_structure TEXT,
+            source_url TEXT,
+            date_str TEXT,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (project_id) REFERENCES projects (id),
+            FOREIGN KEY (competitor_id) REFERENCES geo_competitors (id)
+        )
+    ''')
+
+    # 执行计划表
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS geo_plan (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            project_id INTEGER,
+            week INTEGER NOT NULL,
+            phase TEXT NOT NULL,
+            description TEXT,
+            deliverable TEXT,
+            status TEXT DEFAULT 'pending',
+            due_date TEXT,
+            completed_date TEXT,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (project_id) REFERENCES projects (id)
+        )
+    ''')
+
+    # ========== 智能素材库2.0表 ==========
+
+    # 文档表
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS geo_documents (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            project_id INTEGER,
+            filename TEXT NOT NULL,
+            original_filename TEXT NOT NULL,
+            file_type TEXT NOT NULL,
+            file_size INTEGER DEFAULT 0,
+            category TEXT DEFAULT 'general',
+            storage_path TEXT NOT NULL,
+            content_preview TEXT,
+            word_count INTEGER DEFAULT 0,
+            is_parsed INTEGER DEFAULT 0,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (project_id) REFERENCES projects (id)
+        )
+    ''')
+
+    # 文档分段表（用于向量检索）
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS geo_document_chunks (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            document_id INTEGER NOT NULL,
+            chunk_index INTEGER NOT NULL,
+            content TEXT NOT NULL,
+            content_length INTEGER DEFAULT 0,
+            vector TEXT,
+            is_embedded INTEGER DEFAULT 0,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (document_id) REFERENCES geo_documents (id)
+        )
+    ''')
+
+    # 摘要表（文档级/分类级/全局级）
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS geo_summaries (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            project_id INTEGER,
+            summary_level TEXT NOT NULL,
+            target_id INTEGER,
+            title TEXT,
+            content TEXT NOT NULL,
+            is_manual_edit INTEGER DEFAULT 0,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (project_id) REFERENCES projects (id)
+        )
+    ''')
+
     conn.commit()
     conn.close()
 

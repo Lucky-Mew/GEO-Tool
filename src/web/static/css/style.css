@@ -1396,3 +1396,449 @@ header {
     font-size: 0.95em;
 }
 
+/* ========== GEO 优化样式 ========== */
+
+/* GEO 按钮特殊样式 */
+.nav-btn.geo-btn {
+    background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+    color: white;
+    border-color: transparent;
+}
+
+.nav-btn.geo-btn:hover {
+    background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
+    transform: translateY(-1px);
+}
+
+.nav-btn.geo-btn.active {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+
+/* GEO 子导航 */
+.geo-subnav {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 12px;
+    flex-wrap: wrap;
+    background: rgba(255,255,255,0.9);
+    padding: 8px;
+    border-radius: 10px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.06);
+}
+
+.geo-nav-btn {
+    padding: 8px 12px;
+    border: 2px solid transparent;
+    border-radius: 7px;
+    background: #f3f4f6;
+    color: #555;
+    cursor: pointer;
+    font-size: 0.85em;
+    font-weight: 600;
+    transition: all 0.2s;
+}
+
+.geo-nav-btn:hover {
+    background: #e5e7eb;
+    color: #667eea;
+}
+
+.geo-nav-btn.active {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border-color: transparent;
+    box-shadow: 0 3px 10px rgba(102,126,234,0.25);
+}
+
+/* GEO 子视图 */
+.geo-subview {
+    display: none;
+}
+
+.geo-subview.active {
+    display: block;
+}
+
+/* GEO 区域头部 */
+.geo-section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+    padding: 12px 16px;
+    background: linear-gradient(135deg, rgba(102,126,234,0.08) 0%, rgba(118,75,162,0.08) 100%);
+    border-radius: 10px;
+}
+
+.geo-section-header h3 {
+    margin: 0;
+    color: #333;
+    font-size: 1.05em;
+}
+
+/* GEO 标签页 */
+.geo-tab-bar {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 12px;
+    flex-wrap: wrap;
+}
+
+.geo-tab {
+    padding: 6px 12px;
+    border: 2px solid #e5e7eb;
+    border-radius: 20px;
+    background: white;
+    color: #555;
+    cursor: pointer;
+    font-size: 0.85em;
+    font-weight: 500;
+    transition: all 0.2s;
+}
+
+.geo-tab:hover {
+    border-color: #667eea;
+    color: #667eea;
+}
+
+.geo-tab.active {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border-color: transparent;
+}
+
+/* GEO 列表 */
+.geo-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.geo-list-item {
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    padding: 14px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.06);
+    transition: all 0.2s;
+}
+
+.geo-list-item:hover {
+    border-color: #667eea;
+    box-shadow: 0 4px 12px rgba(102,126,234,0.15);
+    transform: translateY(-1px);
+}
+
+.geo-list-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.geo-list-title {
+    font-weight: 600;
+    color: #333;
+    font-size: 0.95em;
+}
+
+.geo-list-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-size: 0.75em;
+    font-weight: 600;
+}
+
+.badge-brand {
+    background: #dbeafe;
+    color: #1d4ed8;
+}
+
+.badge-accurate {
+    background: #dcfce7;
+    color: #15803d;
+}
+
+.badge-generic {
+    background: #fef3c7;
+    color: #b45309;
+}
+
+.badge-scene {
+    background: #f3e8ff;
+    color: #7e22ce;
+}
+
+.badge-hit {
+    background: #dcfce7;
+    color: #15803d;
+}
+
+.badge-miss {
+    background: #fee2e2;
+    color: #b91c1c;
+}
+
+.geo-list-meta {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    font-size: 0.8em;
+    color: #666;
+}
+
+.geo-list-actions {
+    display: flex;
+    gap: 6px;
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid #f3f4f6;
+}
+
+.geo-list-actions button {
+    padding: 5px 10px;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 0.8em;
+    transition: all 0.2s;
+}
+
+/* GEO 内容编辑器 */
+.geo-content-editor {
+    background: white;
+    border-radius: 10px;
+    padding: 16px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.06);
+}
+
+.geo-check-result {
+    margin-top: 12px;
+    padding: 12px;
+    border-radius: 8px;
+    background: #f9fafb;
+}
+
+.geo-check-result .check-pass {
+    color: #15803d;
+    font-weight: 600;
+}
+
+.geo-check-result .check-fail {
+    color: #b91c1c;
+    font-weight: 600;
+}
+
+.geo-check-result ul {
+    margin: 8px 0 0 20px;
+    font-size: 0.9em;
+    color: #555;
+}
+
+.geo-check-result li {
+    margin: 4px 0;
+}
+
+/* GEO 进度条 */
+.geo-progress {
+    background: #e5e7eb;
+    border-radius: 10px;
+    height: 24px;
+    overflow: hidden;
+    margin: 12px 0;
+}
+
+.geo-progress-bar {
+    height: 100%;
+    background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+    transition: width 0.3s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.geo-progress-text {
+    color: white;
+    font-size: 0.8em;
+    font-weight: 600;
+}
+
+/* GEO 统计卡片（6列） */
+.geo-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 10px;
+    margin-bottom: 12px;
+}
+
+/* GEO 竞品卡片 */
+.geo-competitor-card {
+    background: linear-gradient(135deg, #fff 0%, #fef2f2 100%);
+    border: 1px solid #fecaca;
+}
+
+.geo-gap-highlight {
+    background: #fef9c3;
+    border-left: 3px solid #eab308;
+    padding: 10px 12px;
+    border-radius: 5px;
+    margin: 8px 0;
+}
+
+/* GEO 计划状态 */
+.plan-status-pending {
+    background: #f3f4f6;
+    color: #666;
+}
+
+.plan-status-progress {
+    background: #dbeafe;
+    color: #1d4ed8;
+}
+
+.plan-status-completed {
+    background: #dcfce7;
+    color: #15803d;
+}
+
+/* GEO 素材分类颜色 */
+.category-price {
+    background: #dbeafe;
+    color: #1d4ed8;
+}
+
+.category-period {
+    background: #dcfce7;
+    color: #15803d;
+}
+
+.category-technical {
+    background: #fef3c7;
+    color: #b45309;
+}
+
+.category-patent {
+    background: #f3e8ff;
+    color: #7e22ce;
+}
+
+.category-clinical {
+    background: #fee2e2;
+    color: #b91c1c;
+}
+
+.category-population {
+    background: #cffafe;
+    color: #0e7490;
+}
+
+/* 响应式调整 */
+@media (max-width: 1200px) {
+    .geo-stats-grid {
+        grid-template-columns: repeat(3, 1fr);
+    }
+}
+
+/* ========== 分页样式 ========== */
+.pagination-container {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px;
+    background: white;
+    border-radius: 8px;
+    margin-top: 12px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.06);
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+.page-size-selector {
+    display: flex;
+    align-items: center;
+    color: #4b5563;
+    font-size: 0.9em;
+}
+
+.pagination-info {
+    color: #6b7280;
+    font-size: 0.9em;
+}
+
+.pagination-buttons {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.pagination-btn {
+    padding: 6px 12px;
+    border: 1px solid #d1d5db;
+    background: white;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.9em;
+    color: #4b5563;
+    transition: all 0.2s;
+}
+
+.pagination-btn:hover:not(:disabled) {
+    background: #f3f4f6;
+    border-color: #667eea;
+    color: #667eea;
+}
+
+.pagination-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.pagination-current {
+    color: #4b5563;
+    font-size: 0.9em;
+    padding: 0 8px;
+}
+
+@media (max-width: 768px) {
+    .pagination-container {
+        flex-direction: column;
+        text-align: center;
+    }
+
+    .geo-subnav {
+        justify-content: flex-start;
+    }
+
+    .geo-nav-btn {
+        flex: 1 1 30%;
+        min-width: 100px;
+    }
+
+    .geo-stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+/* ========== GEO 空状态优化 ========== */
+
+.geo-list .empty-state {
+    background: white;
+    border: 2px dashed #e5e7eb;
+    color: #4b5563;
+}
+
+.geo-list .empty-state .empty-state-icon {
+    color: #9ca3af;
+}
+
+.geo-list .empty-state p {
+    color: #6b7280;
+    margin: 6px 0;
+}
+

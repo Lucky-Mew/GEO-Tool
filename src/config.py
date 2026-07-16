@@ -41,6 +41,16 @@ def get_monitor_data_dir(project_id: Optional[int] = None) -> Path:
     return dir_path
 
 
+def get_document_storage_dir(project_id: Optional[int] = None) -> Path:
+    """获取文档存储目录"""
+    if project_id:
+        dir_path = DATA_DIR / "documents" / f"project_{project_id}"
+    else:
+        dir_path = DATA_DIR / "documents"
+    dir_path.mkdir(parents=True, exist_ok=True)
+    return dir_path
+
+
 def get_db_path() -> Path:
     """获取数据库文件路径"""
     get_data_dir()

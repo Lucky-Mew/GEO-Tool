@@ -9,6 +9,11 @@ let positionChart = null;
 let trendStats = [];
 let isProjectManagementMode = false;
 
+// GEO 关键词分页状态
+let currentKeywordPage = 1;
+let keywordPageSize = 5;
+let keywordPaginationData = null;
+
 // 页面加载
 document.addEventListener('DOMContentLoaded', () => {
     loadProjects();
@@ -161,8 +166,7 @@ async function deleteProject(event, projectId, projectName) {
             alert('项目已成功删除');
 
             // 如果删除的是当前选中的项目，清空选择
-            if (currentProjectId === projectId) {
-                currentProjectId = null;
+            if (currentProjectId === projectId) {                currentProjectId = null;
                 currentProjectName = '';
                 document.getElementById('noProjectSelected').style.display = 'flex';
                 document.getElementById('projectContent').style.display = 'none';
@@ -175,7 +179,7 @@ async function deleteProject(event, projectId, projectName) {
         }
     } catch (error) {
         console.error('删除项目失败:', error);
-        alert('删除项目失败');
+        alert('删除失败');
     }
 }
 
@@ -202,8 +206,7 @@ async function createProject() {
             if (!isProjectManagementMode) {
                 selectProject(data.project_id, name, desc);
             }
-        } else {
-            alert('创建失败: ' + data.error);
+        } else {            alert('创建失败: ' + data.error);
         }
     } catch (error) {
         console.error('创建项目失败:', error);
@@ -227,7 +230,8 @@ function showView(viewName) {
         initDashboardView();
     } else if (viewName === 'files') {
         initFilesView();
-    } else if (viewName === 'control') {initControlView();
+    } else if (viewName === 'control') {
+        initControlView();
     }
 }
 
@@ -1539,3 +1543,1198 @@ async function continueTask() {
 async function continueAfterCaptcha() {
     await continueTask();
 }
+
+// ========== GEO 优化功能 ==========
+
+let currentGeoView = 'documents';
+let currentKeywordFilter = 'all';
+let currentDocFilter = 'all';
+let geoTierChart = null;
+let geoPositionChart = null;
+
+// 扩展 showView 支持 GEO 视图
+const originalShowView = showView;
+showView = function(viewName) {
+    // 调用原始函数
+    if (viewName !== 'geo') {
+        document.querySelectorAll('.geo-nav-btn').forEach(b => b.classList.remove('active'));
+    }
+
+    if (viewName === 'geo') {
+        document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+        document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+        document.getElementById('geoView').classList.add('active');
+        const navBtn = document.querySelector(`.nav-btn.geo-btn`);
+        if (navBtn) navBtn.classList.add('active');
+        initGeoView();
+    } else {
+        originalShowView(viewName);
+    }
+};
+
+function initGeoView() {
+    // 初始化 GEO 视图
+    showGeoView('documents');
+    loadDocuments();
+}
+
+function showGeoView(viewName) {
+    currentGeoView = viewName;
+    document.querySelectorAll('.geo-subview').forEach(v => v.style.display = 'none');
+    document.querySelectorAll('.geo-nav-btn').forEach(b => b.classList.remove('active'));
+
+    const viewElementId = 'geo' + viewName.charAt(0).toUpperCase() + viewName.slice(1) + 'View';
+    const viewEl = document.getElementById(viewElementId);
+    if (viewEl) viewEl.style.display = 'block';
+
+    const navBtn = document.querySelector(`.geo-nav-btn[onclick="showGeoView('${viewName}')"]`);
+    if (navBtn) navBtn.classList.add('active');
+
+    if (viewName === 'keywords') {
+        loadKeywordStats();
+        loadKeywords();
+    } else if (viewName === 'documents') {
+        loadDocuments();
+    } else if (viewName === 'content') {
+        // 自动填充品牌名
+        if (currentProjectId && currentProjectName) {
+            document.getElementById('geoContentBrand').value = currentProjectName;
+        }
+    } else if (viewName === 'competitors') {
+        loadCompetitorData();
+    }
+}
+
+// ========== 关键词库 ==========
+
+function filterKeywords(filter) {
+    currentKeywordFilter = filter;
+    document.querySelectorAll('.geo-tab').forEach(t => t.classList.remove('active'));
+    event.target.classList.add('active');
+    loadKeywords();
+}
+
+async function loadKeywordStats() {
+    if (!currentProjectId) return;
+    try {
+        const response = await fetch(`/api/geo/keywords?project_id=${currentProjectId}&page=1&page_size=1000`);
+        const data = await response.json();
+        if (data.success && data.stats) {
+            const statsContainer = document.getElementById('geoKeywordStats');
+            if (statsContainer) {
+                const tierNames = {brand: '品牌词', accurate: '精准词', generic: '大词', scene: '场景词'};
+                let html = '<div class="stats-grid" style="grid-template-columns: repeat(4,1fr)">';
+                for (const tier in data.stats) {
+                    const s = data.stats[tier];
+                    const color = tier === 'brand' ? '#dbeafe' : tier === 'accurate' ? '#dcfce7' : tier === 'generic' ? '#fef3c7' : '#f3e8ff';
+                    const textColor = tier === 'brand' ? '#1d4ed8' : tier === 'accurate' ? '#15803d' : tier === 'generic' ? '#b45309' : '#7e22ce';
+                    html += `
+                        <div class="stat-card" style="background: ${color}">
+                            <div class="stat-value" style="color: ${textColor}; font-size:1.8em">${s.total}</div>
+                            <div class="stat-label" style="color: ${textColor}">${tierNames[tier]}</div>
+                        </div>
+                    `;
+                }
+                html += '</div>';
+                statsContainer.innerHTML = html;
+            }
+        }
+    } catch (error) {
+        console.error('加载关键词统计失败:', error);
+    }
+}
+
+async function loadKeywords(resetPage = true) {
+    if (!currentProjectId) return;
+    if (resetPage) {
+        currentKeywordPage = 1;
+    }
+
+    const container = document.getElementById('geoKeywordList');
+    if (container) {
+        container.innerHTML = '<div style="padding:20px;text-align:center;">加载中...</div>';
+    }
+
+    try {
+        let url = `/api/geo/keywords?project_id=${currentProjectId}&page=${currentKeywordPage}&page_size=${keywordPageSize}`;
+        if (currentKeywordFilter !== 'all') {
+            url += `&tier=${currentKeywordFilter}`;
+        }
+        const response = await fetch(url);
+        const data = await response.json();
+        if (data.success) {
+            keywordPaginationData = data.pagination;
+            renderKeywords(data.keywords);
+            try {
+                renderKeywordPagination();
+            } catch (e) {
+                console.error('分页渲染失败:', e);
+            }
+        }
+    } catch (error) {
+        console.error('加载关键词失败:', error);
+        if (container) {
+            container.innerHTML = '<div style="padding:20px;text-align:center;color:red;">加载失败</div>';
+        }
+    }
+}
+
+function renderKeywordPagination() {
+    const container = document.getElementById('geoKeywordPagination');
+    if (!container || !keywordPaginationData) return;
+
+    const {page, page_size, total, total_pages} = keywordPaginationData;
+
+    if (total === 0) {
+        container.innerHTML = '';
+        return;
+    }
+
+    let html = '<div class="pagination-container">';
+
+    // 每页条数选择
+    html += `
+        <div class="page-size-selector">
+            每页:
+            <select onchange="changePageSize(this.value)" style="margin-left: 8px; padding: 4px 8px; border-radius: 4px; border: 1px solid #d1d5db">
+                <option value="5" ${keywordPageSize === 5 ? 'selected' : ''}>5条</option>
+                <option value="10" ${keywordPageSize === 10 ? 'selected' : ''}>10条</option>
+            </select>
+        </div>
+    `;
+
+    // 分页信息
+    const start = (page - 1) * page_size + 1;
+    const end = Math.min(page * page_size, total);
+    html += `<div class="pagination-info">显示 ${start}-${end} 条，共 ${total} 条</div>`;
+
+    // 分页按钮
+    html += '<div class="pagination-buttons">';
+    html += `<button class="pagination-btn" onclick="goToPage(1)" ${page === 1 ? 'disabled' : ''}>首页</button>`;
+    html += `<button class="pagination-btn" onclick="goToPage(${page - 1})" ${page === 1 ? 'disabled' : ''}>上一页</button>`;
+    html += `<span class="pagination-current">第 ${page} / ${total_pages} 页</span>`;
+    html += `<button class="pagination-btn" onclick="goToPage(${page + 1})" ${page === total_pages ? 'disabled' : ''}>下一页</button>`;
+    html += `<button class="pagination-btn" onclick="goToPage(${total_pages})" ${page === total_pages ? 'disabled' : ''}>末页</button>`;
+    html += '</div>';
+
+    html += '</div>';
+    container.innerHTML = html;
+}
+
+function goToPage(page) {
+    if (!keywordPaginationData) return;
+    if (page < 1 || page > keywordPaginationData.total_pages) return;
+    currentKeywordPage = page;
+    loadKeywords(false);
+}
+
+function changePageSize(size) {
+    keywordPageSize = parseInt(size);
+    currentKeywordPage = 1;
+    loadKeywords(false);
+}
+
+function renderKeywords(keywords) {
+    const container = document.getElementById('geoKeywordList');
+    if (!keywords || keywords.length === 0) {
+        container.innerHTML = `
+            <div class="empty-state" style="background:white; border:2px dashed #e5e7eb; border-radius:8px">
+                <div class="empty-state-icon" style="color:#9ca3af">📭</div>
+                <p style="color:#4b5563; font-weight:500">暂无关键词</p>
+                <p style="color:#6b7280">点击"自动生成"来批量创建关键词</p>
+            </div>
+        `;
+        return;
+    }
+
+    const tierBadges = {
+        brand: 'badge-brand', accurate: 'badge-accurate', generic: 'badge-generic', scene: 'badge-scene'
+    };
+    const tierNames = {
+        brand: '品牌词', accurate: '精准词', generic: '大词', scene: '场景词'
+    };
+
+    container.innerHTML = keywords.map(kw => `
+        <div class="geo-list-item">
+            <div class="geo-list-header">
+                <span class="geo-list-title">${escapeHtml(kw.keyword)}</span>
+                <span class="geo-list-badge ${tierBadges[kw.tier]}">${tierNames[kw.tier]}</span>
+            </div>
+            <div class="geo-list-meta">
+                难度: ${kw.difficulty}/100 ${kw.is_target ? '| ⭐ 核心词' : ''}
+            </div>
+            <div class="geo-list-actions">
+                <button class="btn-edit" onclick="editKeyword(${kw.id})">✏️ 编辑</button>
+                <button class="btn-delete" onclick="deleteKeyword(${kw.id})">🗑️ 删除</button>
+            </div>
+        </div>
+    `).join('');
+}
+
+function openAddKeywordModal() {
+    document.getElementById('newKeywordText').value = '';
+    document.getElementById('newKeywordTier').value = 'brand';
+    document.getElementById('newKeywordDifficulty').value = '50';
+    document.getElementById('newKeywordIsTarget').checked = false;
+    document.getElementById('addKeywordModal').style.display = 'flex';
+}
+
+function closeAddKeywordModal() {
+    document.getElementById('addKeywordModal').style.display = 'none';
+}
+
+async function saveKeyword() {
+    if (!currentProjectId) return;
+    const keyword = document.getElementById('newKeywordText').value.trim();
+    const tier = document.getElementById('newKeywordTier').value;
+    const difficulty = parseInt(document.getElementById('newKeywordDifficulty').value);
+    const isTarget = document.getElementById('newKeywordIsTarget').checked;
+
+    if (!keyword) {
+        alert('请输入关键词');
+        return;
+    }
+
+    try {
+        const response = await fetch('/api/geo/keywords', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                project_id: currentProjectId,
+                keyword, tier, difficulty, is_target: isTarget
+            })
+        });
+        const data = await response.json();
+        if (data.success) {
+            closeAddKeywordModal();
+            loadKeywordStats();
+            loadKeywords();
+        } else {
+            alert('保存失败: ' + data.error);
+        }
+    } catch (error) {
+        console.error('保存失败:', error);
+        alert('保存失败');
+    }
+}
+
+// GEO关键词生成状态
+let generatedSuggestions = null;
+
+async function openKeywordGenModal() {
+    // 重置状态
+    generatedSuggestions = null;
+
+    // 初始化UI
+    document.getElementById('genResultPreview').style.display = 'none';
+    document.getElementById('genResultContent').innerHTML = '';
+    document.getElementById('smartGenStatus').innerHTML = '<p style="color: #666;">点击"开始挖掘"来分析文档内容</p>';
+
+    // 检查文档库
+    const hasDocs = await checkDocumentsAndShowAlert();
+
+    // 控制按钮状态
+    const genBtn = document.getElementById('genBtnSmart');
+    if (hasDocs) {
+        genBtn.style.display = 'inline-block';
+    } else {
+        genBtn.style.display = 'none';
+    }
+
+    document.getElementById('keywordGenModal').style.display = 'flex';
+}
+
+async function checkDocumentsAndShowAlert() {
+    try {
+        const response = await fetch(`/api/geo/keywords/check-docs?project_id=${currentProjectId}`);
+        const data = await response.json();
+        const alertEl = document.getElementById('docEmptyAlert');
+        const genView = document.getElementById('genSmartView');
+
+        if (data.success && !data.has_documents) {
+            alertEl.style.display = 'block';
+            genView.style.display = 'none';
+            return false;
+        } else {
+            alertEl.style.display = 'none';
+            genView.style.display = 'block';
+            return true;
+        }
+    } catch (error) {
+        console.error('检查文档失败:', error);
+        return false;
+    }
+}
+
+function closeKeywordGenModal() {
+    document.getElementById('keywordGenModal').style.display = 'none';
+    generatedSuggestions = null;
+}
+
+async function generateKeywords() {
+    if (!currentProjectId) return;
+    await generateKeywordsFromDocs();
+}
+
+async function generateKeywordsFromDocs() {
+    const statusEl = document.getElementById('smartGenStatus');
+    statusEl.innerHTML = '<p style="color: #666;">🔄 正在分析文档内容...</p>';
+
+    try {
+        const response = await fetch('/api/geo/keywords/generate-from-docs', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                project_id: currentProjectId
+            })
+        });
+        const data = await response.json();
+
+        if (data.success) {
+            generatedSuggestions = data.suggestions;
+            const total = (generatedSuggestions.brand?.length || 0) +
+                         (generatedSuggestions.accurate?.length || 0) +
+                         (generatedSuggestions.generic?.length || 0) +
+                         (generatedSuggestions.scene?.length || 0);
+
+            if (total === 0) {
+                statusEl.innerHTML = '<p style="color: #dc2626;">未能从文档中提取到关键词，请尝试上传更多文档</p>';
+                return;
+            }
+
+            // 显示预览
+            renderKeywordPreview(generatedSuggestions);
+            statusEl.innerHTML = `<p style="color: #16a34a;">✅ 已挖掘 ${total} 个关键词</p>`;
+        } else {
+            statusEl.innerHTML = `<p style="color: #dc2626;">❌ ${data.error || '生成失败'}</p>`;
+        }
+    } catch (error) {
+        console.error('智能挖掘失败:', error);
+        statusEl.innerHTML = '<p style="color: #dc2626;">❌ 生成失败</p>';
+    }
+}
+
+function renderKeywordPreview(suggestions) {
+    const tierNames = {brand: '品牌词', accurate: '精准词', generic: '大词', scene: '场景词'};
+    const tierColors = {
+        brand: '#dbeafe',
+        accurate: '#dcfce7',
+        generic: '#fef3c7',
+        scene: '#f3e8ff'
+    };
+    const tierTextColors = {
+        brand: '#1d4ed8',
+        accurate: '#15803d',
+        generic: '#b45309',
+        scene: '#7e22ce'
+    };
+
+    let html = '';
+
+    for (const tier in suggestions) {
+        const keywords = suggestions[tier];
+        if (!keywords || keywords.length === 0) continue;
+
+        html += `
+            <div style="margin-bottom: 16px;">
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+                    <span style="font-weight: bold; color: ${tierTextColors[tier]};">
+                        ${tierNames[tier]} (${keywords.length})
+                    </span>
+                </div>
+                <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+                    ${keywords.map(kw => `
+                        <span style="padding: 4px 10px; background: ${tierColors[tier]}; border-radius: 16px; font-size: 0.9em; color: ${tierTextColors[tier]};">
+                            ${escapeHtml(kw)}
+                        </span>
+                    `).join('')}
+                </div>
+            </div>
+        `;
+    }
+
+    const total = (suggestions.brand?.length || 0) +
+                 (suggestions.accurate?.length || 0) +
+                 (suggestions.generic?.length || 0) +
+                 (suggestions.scene?.length || 0);
+
+    html += `
+        <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid #e5e7eb;">
+            <button class="btn-save" onclick="saveGeneratedKeywords()">
+                💾 保存全部 ${total} 个关键词
+            </button>
+        </div>
+    `;
+
+    document.getElementById('genResultContent').innerHTML = html;
+    document.getElementById('genResultPreview').style.display = 'block';
+}
+
+async function saveGeneratedKeywords() {
+    if (!generatedSuggestions) {
+        alert('没有可保存的关键词');
+        return;
+    }
+
+    const total = (generatedSuggestions.brand?.length || 0) +
+                 (generatedSuggestions.accurate?.length || 0) +
+                 (generatedSuggestions.generic?.length || 0) +
+                 (generatedSuggestions.scene?.length || 0);
+
+    if (!confirm(`确定保存 ${total} 个关键词吗？`)) {
+        return;
+    }
+
+    try {
+        const allKeywords = [];
+        for (const tier in generatedSuggestions) {
+            for (const keyword of generatedSuggestions[tier]) {
+                allKeywords.push({
+                    keyword,
+                    tier,
+                    difficulty: tier === 'brand' ? 30 : tier === 'accurate' ? 50 : tier === 'generic' ? 80 : 35,
+                    is_target: tier !== 'scene'
+                });
+            }
+        }
+
+        await fetch('/api/geo/keywords/batch', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                project_id: currentProjectId,
+                keywords: allKeywords
+            })
+        });
+
+        closeKeywordGenModal();
+        loadKeywordStats();
+        loadKeywords();
+    } catch (error) {
+        console.error('保存失败:', error);
+        alert('保存失败');
+    }
+}
+
+let editingKeywordId = -1;
+
+function editKeyword(id) {
+    editingKeywordId = id;
+    alert('编辑功能待完善');
+}
+
+async function deleteKeyword(id) {
+    if (!confirm('确定要删除这个关键词吗？')) return;
+    try {
+        const response = await fetch(`/api/geo/keywords/${id}`, {
+            method: 'DELETE',
+            headers: {'Content-Type': 'application/json'}
+        });
+        const data = await response.json();
+        if (data.success) {
+            loadKeywordStats();
+            loadKeywords();
+        }
+    } catch (error) {
+        console.error('删除失败:', error);
+    }
+}
+
+// ========== 文档库 ==========
+
+function filterDocuments(filter) {
+    currentDocFilter = filter;
+    document.querySelectorAll('#geoDocumentsView .geo-tab').forEach(t => t.classList.remove('active'));
+    event.target.classList.add('active');
+    loadDocuments();
+}
+
+async function loadDocuments() {
+    if (!currentProjectId) return;
+    try {
+        let url = `/api/geo/documents?project_id=${currentProjectId}`;
+        if (currentDocFilter !== 'all') {
+            url += `&tag=${encodeURIComponent(currentDocFilter)}`;
+        }
+        const response = await fetch(url);
+        const data = await response.json();
+        if (data.success) {
+            renderDocuments(data.documents);
+            renderSummaries(data.summaries);
+
+            // 动态生成标签过滤栏
+            const tagBar = document.getElementById('geoDocumentTagBar');
+            if (tagBar && data.documents) {
+                const allTags = new Set();
+                data.documents.forEach(doc => {
+                    if (doc.tags) {
+                        doc.tags.split(',').forEach(t => {
+                            const tag = t.trim();
+                            if (tag) allTags.add(tag);
+                        });
+                    }
+                });
+
+                let tagHtml = `<button class="geo-tab ${currentDocFilter === 'all' ? 'active' : ''}" onclick="filterDocuments('all')">全部</button>`;
+                allTags.forEach(tag => {
+                    tagHtml += `<button class="geo-tab ${currentDocFilter === tag ? 'active' : ''}" onclick="filterDocuments('${escapeHtml(tag)}')">${escapeHtml(tag)}</button>`;
+                });
+                tagBar.innerHTML = tagHtml;
+            }
+        }
+    } catch (error) {
+        console.error('加载文档失败:', error);
+    }
+}
+
+function renderDocuments(documents) {
+    const container = document.getElementById('geoDocumentList');
+    if (!documents || documents.length === 0) {
+        container.innerHTML = `
+            <div class="empty-state" style="background:white; border:2px dashed #e5e7eb; border-radius:8px">
+                <div class="empty-state-icon" style="color:#9ca3af">📄</div>
+                <p style="color:#4b5563; font-weight:500">暂无文档</p>
+                <p style="color:#6b7280">点击"上传文档"添加</p>
+            </div>
+        `;
+        return;
+    }
+
+    const typeIcons = {
+        text: '📝',
+        markdown: '📝',
+        word: '📘',
+        pdf: '📕',
+        powerpoint: '📊'
+    };
+
+    container.innerHTML = documents.map(doc => {
+        const tags = doc.tags ? doc.tags.split(',').map(t => t.trim()).filter(t => t) : [];
+        const tagBadges = tags.map(tag => `<span class="geo-list-badge" style="background:#f0f9ff; color:#0369a1">${escapeHtml(tag)}</span>`).join('');
+
+        return `
+            <div class="geo-list-item">
+                <div class="geo-list-header">
+                    <span class="geo-list-title">
+                        ${typeIcons[doc.file_type] || '📄'} ${escapeHtml(doc.original_filename)}
+                    </span>
+                    ${tagBadges}
+                </div>
+                <div class="geo-list-meta">
+                    ${doc.word_count || 0} 字 · ${formatFileSize(doc.file_size)} · ${doc.is_parsed ? '✅ 已解析' : '⏳ 待解析'}
+                </div>
+                ${doc.content_preview ? `<div style="margin:8px 0; color:#666; font-size:0.9em">${escapeHtml(doc.content_preview)}</div>` : ''}
+                <div class="geo-list-actions">
+                    <button class="btn-edit" onclick="openViewDocumentModal(${doc.id}, '${escapeHtml(doc.original_filename)}')">👁️ 查看</button>
+                    <button class="btn-delete" onclick="deleteDocument(${doc.id})">🗑️ 删除</button>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+function renderSummaries(summaries) {
+    const container = document.getElementById('geoSummaryList');
+    if (!summaries || summaries.length === 0) {
+        container.innerHTML = `
+            <div class="empty-state" style="background:white; border:2px dashed #e5e7eb; border-radius:8px">
+                <div class="empty-state-icon" style="color:#9ca3af">📝</div>
+                <p style="color:#4b5563; font-weight:500">暂无摘要</p>
+                <p style="color:#6b7280">点击"创建摘要"添加</p>
+            </div>
+        `;
+        return;
+    }
+
+    const levelNames = {
+        document: '文档摘要',
+        category: '分类摘要',
+        global: '全局摘要'
+    };
+
+    container.innerHTML = summaries.map(s => `
+        <div class="geo-list-item">
+            <div class="geo-list-header">
+                <span class="geo-list-title">${escapeHtml(s.title || levelNames[s.summary_level] || '摘要')}</span>
+                <span class="badge badge-accurate">${levelNames[s.summary_level] || s.summary_level}</span>
+            </div>
+            <div class="geo-list-meta">
+                ${s.is_manual_edit ? '✏️ 人工编辑' : '🤖 AI生成'}
+            </div>
+            <div style="margin:8px 0; color:#333">${escapeHtml(s.content)}</div>
+            <div class="geo-list-actions">
+                <button class="btn-edit" onclick="editSummary(${s.id}, '${escapeHtml(s.content).replace(/'/g, "\\'")}')">✏️ 编辑</button>
+                <button class="btn-delete" onclick="deleteSummary(${s.id})">🗑️ 删除</button>
+            </div>
+        </div>
+    `).join('');
+}
+
+function formatFileSize(bytes) {
+    if (!bytes) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+}
+
+function openUploadDocumentModal() {
+    document.getElementById('documentFile').value = '';
+    document.getElementById('newDocTags').value = '';
+    document.getElementById('uploadDocumentModal').style.display = 'flex';
+}
+
+function closeUploadDocumentModal() {
+    document.getElementById('uploadDocumentModal').style.display = 'none';
+}
+
+async function uploadDocument() {
+    if (!currentProjectId) return;
+    const fileInput = document.getElementById('documentFile');
+    const file = fileInput.files[0];
+    if (!file) {
+        alert('请选择文件');
+        return;
+    }
+
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('project_id', currentProjectId);
+    formData.append('tags', document.getElementById('newDocTags').value);
+
+    try {
+        const response = await fetch('/api/geo/documents', {
+            method: 'POST',
+            body: formData
+        });
+        const data = await response.json();
+        if (data.success) {
+            closeUploadDocumentModal();
+            alert('上传成功！解析了 ' + data.word_count + ' 字，切分为 ' + data.chunks + ' 个片段');
+            loadDocuments();
+        } else {
+            alert('上传失败: ' + data.error);
+        }
+    } catch (error) {
+        console.error('上传失败:', error);
+        alert('上传失败');
+    }
+}
+
+function openViewDocumentModal(docId, filename) {
+    document.getElementById('viewDocTitle').textContent = '📄 ' + filename;
+    document.getElementById('viewDocContent').textContent = '加载中...';
+    document.getElementById('viewDocumentModal').style.display = 'flex';
+    viewDocument(docId);
+}
+
+function closeViewDocumentModal() {
+    document.getElementById('viewDocumentModal').style.display = 'none';
+}
+
+async function viewDocument(docId) {
+    try {
+        const response = await fetch(`/api/geo/documents/${docId}`);
+        const data = await response.json();
+        if (data.success) {
+            let content = data.full_content || '无法读取完整内容';
+            document.getElementById('viewDocContent').textContent = content;
+        }
+    } catch (error) {
+        console.error('查看失败:', error);
+        document.getElementById('viewDocContent').textContent = '加载失败';
+    }
+}
+
+async function deleteDocument(docId) {
+    if (!confirm('确定要删除这个文档吗？')) return;
+    try {
+        const response = await fetch(`/api/geo/documents/${docId}`, {method: 'DELETE'});
+        const data = await response.json();
+        if (data.success) {
+            loadDocuments();
+        }
+    } catch (error) {
+        console.error('删除失败:', error);
+    }
+}
+
+let currentSummaryMode = 'document';
+let currentDocumentsForSummary = [];
+
+function openCreateSummaryModal(level) {
+    currentSummaryMode = level || 'document';
+    document.getElementById('summaryLevel').value = level || 'document';
+    document.getElementById('summaryTitle').value = '';
+    document.getElementById('summaryContent').value = '';
+    updateSummaryTarget();
+    document.getElementById('createSummaryModal').style.display = 'flex';
+}
+
+function closeCreateSummaryModal() {
+    document.getElementById('createSummaryModal').style.display = 'none';
+}
+
+async function updateSummaryTarget() {
+    const level = document.getElementById('summaryLevel').value;
+    const targetGroup = document.getElementById('summaryTargetGroup');
+
+    if (level === 'document' && currentProjectId) {
+        targetGroup.style.display = 'block';
+        const select = document.getElementById('summaryTargetId');
+        try {
+            const response = await fetch(`/api/geo/documents?project_id=${currentProjectId}`);
+            const data = await response.json();
+            if (data.success) {
+                currentDocumentsForSummary = data.documents;
+                select.innerHTML = data.documents.map(d =>
+                    `<option value="${d.id}">${escapeHtml(d.original_filename)}</option>`
+                ).join('');
+            }
+        } catch (error) {
+            console.error('加载文档列表失败:', error);
+        }
+    } else if (level === 'category') {
+        targetGroup.style.display = 'block';
+        const select = document.getElementById('summaryTargetId');
+        select.innerHTML = `
+            <option value="price">价格数据</option>
+            <option value="period">周期数据</option>
+            <option value="technical">技术参数</option>
+            <option value="patent">专利信息</option>
+            <option value="clinical">临床背书</option>
+            <option value="population">适用人群</option>
+        `;
+    } else {
+        targetGroup.style.display = 'none';
+    }
+}
+
+async function generateSummary() {
+    const level = document.getElementById('summaryLevel').value;
+    if (level !== 'document') {
+        alert('目前仅支持为单个文档自动生成摘要');
+        return;
+    }
+    const docId = document.getElementById('summaryTargetId').value;
+    if (!docId) {
+        alert('请先选择一个文档');
+        return;
+    }
+
+    try {
+        const btn = event.target;
+        const originalText = btn.textContent;
+        btn.textContent = '生成中...';
+        btn.disabled = true;
+
+        const response = await fetch(`/api/geo/documents/${docId}/generate-summary`, {
+            method: 'POST'
+        });
+        const data = await response.json();
+        if (data.success) {
+            document.getElementById('summaryTitle').value = data.title;
+            document.getElementById('summaryContent').value = data.content;
+        } else {
+            alert('生成摘要失败: ' + data.error);
+        }
+
+        btn.textContent = originalText;
+        btn.disabled = false;
+    } catch (error) {
+        console.error('生成摘要失败:', error);
+        alert('生成摘要失败');
+    }
+}
+
+async function saveSummary() {
+    if (!currentProjectId) return;
+    const level = document.getElementById('summaryLevel').value;
+    const title = document.getElementById('summaryTitle').value.trim();
+    const content = document.getElementById('summaryContent').value.trim();
+
+    if (!content) {
+        alert('请填写摘要内容');
+        return;
+    }
+
+    let targetId = null;
+    if (level === 'document') {
+        targetId = parseInt(document.getElementById('summaryTargetId').value);
+    } else if (level === 'category') {
+        targetId = document.getElementById('summaryTargetId').value;
+    }
+
+    try {
+        const response = await fetch('/api/geo/summaries', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                project_id: currentProjectId,
+                summary_level: level,
+                target_id: targetId,
+                title,
+                content,
+                is_manual: true
+            })
+        });
+        const data = await response.json();
+        if (data.success) {
+            closeCreateSummaryModal();
+            loadDocuments();
+        } else {
+            alert('保存失败: ' + data.error);
+        }
+    } catch (error) {
+        console.error('保存失败:', error);
+        alert('保存失败');
+    }
+}
+
+function editSummary(summaryId, content) {
+    const newContent = prompt('编辑摘要内容:', content);
+    if (newContent !== null && newContent.trim()) {
+        updateSummary(summaryId, newContent.trim());
+    }
+}
+
+async function updateSummary(summaryId, content) {
+    try {
+        const response = await fetch(`/api/geo/summaries/${summaryId}`, {
+            method: 'PUT',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({content, is_manual: true})
+        });
+        const data = await response.json();
+        if (data.success) {
+            loadDocuments();
+        }
+    } catch (error) {
+        console.error('更新失败:', error);
+    }
+}
+
+async function deleteSummary(summaryId) {
+    if (!confirm('确定要删除这个摘要吗？')) return;
+    try {
+        const response = await fetch(`/api/geo/summaries/${summaryId}`, {method: 'DELETE'});
+        const data = await response.json();
+        if (data.success) {
+            loadDocuments();
+        }
+    } catch (error) {
+        console.error('删除失败:', error);
+    }
+}
+
+// ========== 内容生产助手 ==========
+
+let allKeywordsForSelector = [];
+let currentKeywordTierFilter = 'all';
+
+async function generateGEOContent() {
+    if (!currentProjectId) return;
+    const contentType = document.getElementById('geoContentType').value;
+    const question = document.getElementById('geoContentTitle').value.trim();
+    const brandName = document.getElementById('geoContentBrand').value.trim();
+    const btn = event.target;
+    const originalText = btn.textContent;
+
+    if (!question) {
+        alert('请输入或选择问题');
+        return;
+    }
+
+    try {
+        btn.textContent = '⏳ 正在检索素材...';
+        btn.disabled = true;
+
+        const response = await fetch('/api/geo/content/generate', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                project_id: currentProjectId,
+                type: contentType,
+                question,
+                brand_name: brandName
+            })
+        });
+
+        btn.textContent = '⏳ 正在生成文章...';
+
+        const data = await response.json();
+        if (data.success) {
+            document.getElementById('geoContentPreview').value = data.content;
+            btn.textContent = '✅ 生成完成';
+            setTimeout(() => {
+                btn.textContent = originalText;
+                btn.disabled = false;
+            }, 1500);
+        }
+    } catch (error) {
+        console.error('生成失败:', error);
+        alert('生成失败');
+        btn.textContent = originalText;
+        btn.disabled = false;
+    }
+}
+
+// ========== 关键词选择器 ==========
+
+function openKeywordSelector() {
+    if (!currentProjectId) return;
+
+    // 重置筛选状态
+    currentKeywordTierFilter = 'all';
+    document.getElementById('keywordSelectorSearch').value = '';
+
+    // 重置tab样式
+    const tabs = document.querySelectorAll('#keywordSelectorTabs .geo-tab');
+    tabs.forEach(tab => tab.classList.remove('active'));
+    tabs[0].classList.add('active');
+
+    document.getElementById('keywordSelectorModal').style.display = 'flex';
+    loadKeywordsForSelector();
+}
+
+function closeKeywordSelector() {
+    document.getElementById('keywordSelectorModal').style.display = 'none';
+}
+
+async function loadKeywordsForSelector() {
+    if (!currentProjectId) return;
+    try {
+        const response = await fetch(`/api/geo/keywords?project_id=${currentProjectId}&page=1&page_size=1000`);
+        const data = await response.json();
+        if (data.success) {
+            allKeywordsForSelector = data.keywords || [];
+            renderKeywordSelectorList();
+        }
+    } catch (error) {
+        console.error('加载关键词失败:', error);
+    }
+}
+
+function renderKeywordSelectorList() {
+    const listDiv = document.getElementById('keywordSelectorList');
+    const searchText = document.getElementById('keywordSelectorSearch').value.toLowerCase().trim();
+
+    let filtered = allKeywordsForSelector;
+
+    // 按层级过滤
+    if (currentKeywordTierFilter !== 'all') {
+        filtered = filtered.filter(kw => kw.tier === currentKeywordTierFilter);
+    }
+
+    // 按搜索文本过滤
+    if (searchText) {
+        filtered = filtered.filter(kw => kw.keyword.toLowerCase().includes(searchText));
+    }
+
+    if (filtered.length === 0) {
+        listDiv.innerHTML = '<div style="text-align:center;color:#999;padding:20px">没有找到关键词</div>';
+        return;
+    }
+
+    const tierNames = {
+        'brand': '品牌词',
+        'accurate': '精准词',
+        'generic': '大词',
+        'scene': '场景词'
+    };
+
+    let html = '';
+    for (const kw of filtered) {
+        html += `
+            <div class="geo-list-item" style="cursor:pointer;padding:12px;border-radius:8px;transition:background 0.2s"
+                 onmouseover="this.style.background='#f0f0f0'"
+                 onmouseout="this.style.background=''"
+                 onclick="selectKeyword('${escapeHtml(kw.keyword)}')">
+                <div style="font-weight:500">${escapeHtml(kw.keyword)}</div>
+                <div style="font-size:0.85em;color:#666;margin-top:4px">
+                    <span class="geo-badge tier-${kw.tier}">${tierNames[kw.tier]}</span>
+                    ${kw.is_target ? '<span class="geo-badge target" style="background:#e6f7ff;color:#1890ff">核心目标</span>' : ''}
+                </div>
+            </div>
+        `;
+    }
+    listDiv.innerHTML = html;
+}
+
+function filterKeywordSelector() {
+    renderKeywordSelectorList();
+}
+
+function filterKeywordSelectorByTier(tier) {
+    currentKeywordTierFilter = tier;
+
+    // 更新tab样式
+    const tabs = document.querySelectorAll('#keywordSelectorTabs .geo-tab');
+    tabs.forEach(tab => tab.classList.remove('active'));
+    event.target.classList.add('active');
+
+    renderKeywordSelectorList();
+}
+
+function selectKeyword(keyword) {
+    document.getElementById('geoContentTitle').value = keyword;
+    closeKeywordSelector();
+}
+
+async function checkGeoContent() {
+    const content = document.getElementById('geoContentPreview').value;
+    if (!content) {
+        alert('请先生成内容');
+        return;
+    }
+
+    try {
+        const response = await fetch('/api/geo/content/check', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({content})
+        });
+        const data = await response.json();
+        if (data.success) {
+            const resultDiv = document.getElementById('geoCheckResult');
+            resultDiv.innerHTML = `
+                <div class="${data.passed ? 'check-pass' : 'check-fail'}" style="font-weight:bold;margin-bottom:8px">
+                    ${data.passed ? '✓ 通过 GEO 规范检查' : '✗ 需要改进'}
+                </div>
+                ${data.issues.length > 0 ? `
+                    <ul>
+                        ${data.issues.map(i => `<li>${i}</li>`).join('')}
+                    </ul>
+                ` : ''}
+            `;
+        }
+    } catch (error) {
+        console.error('检查失败:', error);
+    }
+}
+
+// ========== 竞品分析 ==========
+
+async function loadCompetitorData() {
+    if (!currentProjectId) return;
+    try {
+        const response = await fetch(`/api/geo/competitors?project_id=${currentProjectId}`);
+        const data = await response.json();
+        if (data.success) {
+            renderCompetitors(data.competitors);
+            renderGapAnalysis(data.gap);
+        }
+    } catch (error) {
+        console.error('加载竞品数据失败:', error);
+    }
+}
+
+function renderCompetitors(competitors) {
+    const container = document.getElementById('geoCompetitorList');
+    if (!competitors || competitors.length === 0) {
+        container.innerHTML = '';
+        return;
+    }
+
+    container.innerHTML = competitors.map(comp => `
+        <div class="geo-list-item geo-competitor-card">
+            <div class="geo-list-header">
+                <span class="geo-list-title">${escapeHtml(comp.name)}</span>
+            </div>
+            ${comp.url ? `<a href="${escapeHtml(comp.url)}" target="_blank" style="color:#667eea;text-decoration:none">${escapeHtml(comp.url)}</a>` : ''}
+            ${comp.notes ? `<div style="margin-top:6px;color:#666">${escapeHtml(comp.notes)}</div>` : ''}
+            <div class="geo-list-actions">
+                <button class="btn-delete" onclick="deleteCompetitor(${comp.id})">🗑️ 删除</button>
+            </div>
+        </div>
+    `).join('');
+}
+
+function renderGapAnalysis(gap) {
+    const container = document.getElementById('geoGapAnalysis');
+    if (!gap) {
+        container.innerHTML = '';
+        return;
+    }
+
+    let html = '';
+    if (gap.gap_keywords && gap.gap_keywords.length > 0) {
+        html += `
+            <div class="geo-gap-highlight">
+                <strong>空白关键词:</strong> ${gap.gap_keywords.map(k => escapeHtml(k)).join(' • ')}
+            </div>
+        `;
+    }
+    if (gap.suggestions) {
+        html += `<div style="margin-top:10px;color:#666">${gap.suggestions.join('')}</div>`;
+    }
+    container.innerHTML = html;
+}
+
+function openAddCompetitorModal() {
+    document.getElementById('newCompetitorName').value = '';
+    document.getElementById('newCompetitorUrl').value = '';
+    document.getElementById('newCompetitorNotes').value = '';
+    document.getElementById('addCompetitorModal').style.display = 'flex';
+}
+
+function closeAddCompetitorModal() {
+    document.getElementById('addCompetitorModal').style.display = 'none';
+}
+
+async function saveCompetitor() {
+    if (!currentProjectId) return;
+    const name = document.getElementById('newCompetitorName').value.trim();
+    const url = document.getElementById('newCompetitorUrl').value.trim();
+    const notes = document.getElementById('newCompetitorNotes').value.trim();
+
+    if (!name) {
+        alert('请输入竞品名称');
+        return;
+    }
+
+    try {
+        const response = await fetch('/api/geo/competitors', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                project_id: currentProjectId,
+                name, url, notes
+            })
+        });
+        const data = await response.json();
+        if (data.success) {
+            closeAddCompetitorModal();
+            loadCompetitorData();
+        } else {
+            alert('保存失败: ' + data.error);
+        }
+    } catch (error) {
+        console.error('保存失败:', error);
+        alert('保存失败');
+    }
+}
+
+async function deleteCompetitor(id) {
+    if (!confirm('确定要删除这个竞品吗？')) return;
+    try {
+        const response = await fetch(`/api/geo/competitors/${id}`, {method: 'DELETE'});
+        const data = await response.json();
+        if (data.success) {
+            loadCompetitorData();
+        }
+    } catch (error) {
+        console.error('删除失败:', error);
+    }
+}
+
+// 弹窗关闭事件
+document.addEventListener('click', (e) => {
+    if (e.target.id === 'addKeywordModal') closeAddKeywordModal();
+    if (e.target.id === 'keywordGenModal') closeKeywordGenModal();
+    if (e.target.id === 'uploadDocumentModal') closeUploadDocumentModal();
+    if (e.target.id === 'createSummaryModal') closeCreateSummaryModal();
+    if (e.target.id === 'viewDocumentModal') closeViewDocumentModal();
+    if (e.target.id === 'keywordSelectorModal') closeKeywordSelector();
+    if (e.target.id === 'addCompetitorModal') closeAddCompetitorModal();
+});
