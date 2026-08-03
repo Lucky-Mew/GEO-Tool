@@ -2,16 +2,33 @@ doubao:
   browser: Chrome           # 浏览器类型：Chrome 或 Edge（Windows 自带）
   # browser_path:           # 浏览器路径（可选，留空则自动检测）
   chrome_profile: C:/Users/你的用户名/AppData/Local/Google/Chrome/User Data/Default
-  delay_between_questions: 60
+  delay_between_questions: 60  # 问题间延迟（秒），留空则使用智能随机延迟
   reply_wait: 60
   timeout: 60
   url: https://www.doubao.com
+  use_cdp: false            # 是否使用 CDP 连接已运行的浏览器
+
+global:
+  default_project: 1        # 默认项目 ID
+
 llm_api:
   api_key: 在此填入你的API Key
-  base_url: https://token-plan.cn-beijing.maas.aliyuncs.com/apps/anthropic
-  model: qwen3.6-flash
-  provider: qwen
-monitor:
-  brand: 你的品牌名
-  question: 你想监测的问题
-  schedule_hours: []
+  base_url: https://ark.cn-beijing.volces.com/api/coding
+  model: doubao-seed-2.0-code
+  provider: qwen            # 支持：qwen, openai, anthropic
+
+# 项目配置（支持多个监测项目）
+projects:
+  - id: 1
+    name: 示例项目
+    description: 这是一个示例监测项目
+    config:
+      schedule_hours: []    # 定时监测时间（小时），如 [10, 14, 18]
+      tasks:
+        - question: 你想监测的问题1
+          brands:
+            - 你的品牌名
+            - 竞品品牌1
+        - question: 你想监测的问题2
+          brands:
+            - 你的品牌名
