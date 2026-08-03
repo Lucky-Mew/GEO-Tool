@@ -69,7 +69,11 @@
       "Bash(findstr \"IPv4\")",
       "Bash(del *)",
       "Bash(findstr python *)",
-      "Bash(taskkill *)"
+      "Bash(taskkill *)",
+      "WebFetch(domain:developer.cloud.tencent.cn)",
+      "WebFetch(domain:www.lawrencehitches.com)",
+      "WebFetch(domain:www.cnblogs.com)",
+      "WebFetch(domain:www.sohu.com)"
     ]
   },
   "statusLine": {

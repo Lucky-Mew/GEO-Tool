@@ -172,6 +172,22 @@ def init_db():
         )
     ''')
 
+    # 豆包引用链接表
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS doubao_citations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            project_id INTEGER,
+            question_id INTEGER NOT NULL,
+            date_str TEXT NOT NULL,
+            url TEXT NOT NULL,
+            context_snippet TEXT,
+            is_imported INTEGER DEFAULT 0,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (project_id) REFERENCES projects (id),
+            FOREIGN KEY (question_id) REFERENCES questions (id)
+        )
+    ''')
+
     # 竞品内容引用表
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS geo_competitor_citations (
@@ -767,6 +783,172 @@ def get_primary_position_data(project_id: Optional[int]) -> Dict:
         for row in cursor.fetchall():
             result[row['mention_position']] = row['count']
         return result
+    finally:
+        conn.close()
+
+
+# ========== 豆包引用链接 ==========
+
+def extract_urls_from_text(text: str) -> list:
+    """从文本中提取URL"""
+    import re
+    if not text:
+        return []
+    url_pattern = r'https?://[^\s<>"\')\]}]+[^\s<>"\')\]\},.;]'
+    urls = re.findall(url_pattern, text)
+    return urls
+
+
+def save_doubao_citations(project_id: Optional[int], question_id: int, date_str: str,
+                           data: str | list[dict]) -> list:
+    """从回答中提取链接并保存，或者直接传入已提取好的citations列表
+
+    data: 可以是response_text字符串，也可以是[{'title': '...', 'url': '...'}, ...]格式
+    """
+    conn = get_connection()
+    cursor = conn.cursor()
+    saved_ids = []
+
+    try:
+        if isinstance(data, list):
+            # 直接传入已提取的 citations
+            for cite in data:
+                url = cite.get('url', '')
+                if not url:
+                    continue
+
+                # 全局检查：这个URL是否已经存在于数据库里（不管是哪个问题问的）
+                cursor.execute('''
+                    SELECT id FROM doubao_citations WHERE url = ?
+                ''', (url,))
+                existing = cursor.fetchone()
+
+                if not existing:
+                    title = cite.get('title', '')
+                    context = title
+                    cursor.execute('''
+                        INSERT INTO doubao_citations
+                        (project_id, question_id, date_str, url, context_snippet, is_imported)
+                        VALUES (?, ?, ?, ?, ?, 0)
+                    ''', (project_id, question_id, date_str, url, context))
+                    saved_ids.append(cursor.lastrowid)
+        else:
+            # 从文本中提取
+            if not data:
+                return []
+            urls = extract_urls_from_text(data)
+            if not urls:
+                return []
+
+            for url in urls:
+                # 全局检查：这个URL是否已经存在于数据库里
+                cursor.execute('''
+                    SELECT id FROM doubao_citations WHERE url = ?
+                ''', (url,))
+                existing = cursor.fetchone()
+
+                if not existing:
+                    idx = data.find(url)
+                    context_start = max(0, idx - 100)
+                    context_end = min(len(data), idx + len(url) + 100)
+                    context = data[context_start:context_end]
+                    cursor.execute('''
+                        INSERT INTO doubao_citations
+                        (project_id, question_id, date_str, url, context_snippet, is_imported)
+                        VALUES (?, ?, ?, ?, ?, 0)
+                    ''', (project_id, question_id, date_str, url, context))
+                    saved_ids.append(cursor.lastrowid)
+
+        conn.commit()
+        return saved_ids
+    except Exception as e:
+        conn.rollback()
+        print(f"保存引用链接失败: {e}")
+        return []
+    finally:
+        conn.close()
+
+
+def get_doubao_citations(
+    project_id: Optional[int],
+    limit: int = 50,
+    offset: int = 0,
+    import_filter: Optional[str] = None  # "imported", "not_imported", None
+) -> dict:
+    """获取豆包引用链接列表（带分页和筛选）
+
+    Returns:
+        {
+            "items": [...],
+            "total": total_count,
+            "page": current_page,
+            "page_size": limit,
+            "total_pages": total_pages
+        }
+    """
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    try:
+        # 构建WHERE条件
+        where_conditions = ['dc.project_id IS ?']
+        params = [project_id]
+
+        if import_filter == 'imported':
+            where_conditions.append('dc.is_imported = 1')
+        elif import_filter == 'not_imported':
+            where_conditions.append('dc.is_imported = 0')
+
+        where_clause = ' AND '.join(where_conditions)
+
+        # 先查总数
+        cursor.execute(f'''
+            SELECT COUNT(*) as total
+            FROM doubao_citations dc
+            WHERE {where_clause}
+        ''', params)
+        total = cursor.fetchone()['total']
+
+        # 再查分页数据
+        cursor.execute(f'''
+            SELECT dc.*, q.question_text
+            FROM doubao_citations dc
+            LEFT JOIN questions q ON dc.question_id = q.id
+            WHERE {where_clause}
+            ORDER BY dc.created_at DESC
+            LIMIT ? OFFSET ?
+        ''', params + [limit, offset])
+
+        rows = cursor.fetchall()
+        items = [dict(row) for row in rows]
+
+        total_pages = (total + limit - 1) // limit if limit > 0 else 0
+        current_page = (offset // limit) + 1
+
+        return {
+            "items": items,
+            "total": total,
+            "page": current_page,
+            "page_size": limit,
+            "total_pages": total_pages
+        }
+
+    finally:
+        conn.close()
+
+
+def mark_citation_imported(citation_id: int):
+    """标记链接已导入"""
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    try:
+        cursor.execute('''
+            UPDATE doubao_citations
+            SET is_imported = 1
+            WHERE id = ?
+        ''', (citation_id,))
+        conn.commit()
     finally:
         conn.close()
 

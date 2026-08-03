@@ -349,6 +349,11 @@ def run_monitor_round(project_id: int):
                 )
                 qid = models.insert_questions(task_id, [task['question']], [resp])[0]
 
+                # 保存豆包引用的链接（直接用提取好的）
+                saved_cite_ids = models.save_doubao_citations(project_id, qid, date_str, citations)
+                if saved_cite_ids:
+                    add_log(project_id, f"    已保存 {len(saved_cite_ids)} 条参考资料链接")
+
                 mention_info = importer.extract_brand_mentions(resp, primary_brand)
                 for brand_variant in task['brands'][1:]:
                     variant_info = importer.extract_brand_mentions(resp, brand_variant)
@@ -711,6 +716,101 @@ def api_project_answer_detail(project_id, date_str, task_folder, answer_file):
             content = f.read()
 
         return jsonify({'success': True, 'content': content})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/projects/<int:project_id>/date/<date_str>', methods=['DELETE'])
+def api_delete_date(project_id, date_str):
+    """删除某天的所有数据（文件+数据库）"""
+    try:
+        import shutil
+
+        # 1. 删除文件
+        monitor_dir = get_monitor_data_dir(project_id)
+        date_dir = monitor_dir / date_str
+        if date_dir.exists():
+            shutil.rmtree(date_dir)
+
+        # 2. 删除数据库记录
+        conn = models.get_connection()
+        cursor = conn.cursor()
+
+        # 找到这天的所有任务
+        cursor.execute('SELECT id FROM monitor_tasks WHERE project_id IS ? AND date_str = ?', (project_id, date_str))
+        task_ids = [row['id'] for row in cursor.fetchall()]
+
+        for task_id in task_ids:
+            # 删除品牌提及
+            cursor.execute('DELETE FROM brand_mentions WHERE question_id IN (SELECT id FROM questions WHERE task_id = ?)', (task_id,))
+            # 删除问题
+            cursor.execute('DELETE FROM questions WHERE task_id = ?', (task_id,))
+            # 删除豆包引用链接
+            cursor.execute('DELETE FROM doubao_citations WHERE question_id IN (SELECT id FROM questions WHERE task_id = ?)', (task_id,))
+            # 删除任务
+            cursor.execute('DELETE FROM monitor_tasks WHERE id = ?', (task_id,))
+
+        # 删除每日摘要
+        cursor.execute('DELETE FROM daily_summaries WHERE project_id IS ? AND date_str = ?', (project_id, date_str))
+
+        conn.commit()
+        conn.close()
+
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/projects/<int:project_id>/date/<date_str>/task/<task_folder>', methods=['DELETE'])
+def api_delete_task(project_id, date_str, task_folder):
+    """删除某个任务（文件+数据库）"""
+    try:
+        import shutil
+
+        # 1. 删除文件
+        monitor_dir = get_monitor_data_dir(project_id)
+        date_dir = monitor_dir / date_str
+        safe_task_folder = task_folder.replace('/', '_').replace('\\', '_')
+        task_dir = date_dir / safe_task_folder
+
+        # 尝试匹配文件夹
+        if not task_dir.exists() and date_dir.exists():
+            for d in date_dir.iterdir():
+                if d.is_dir() and safe_task_folder in d.name:
+                    task_dir = d
+                    break
+
+        if task_dir.exists():
+            shutil.rmtree(task_dir)
+
+        # 2. 删除数据库记录
+        conn = models.get_connection()
+        cursor = conn.cursor()
+
+        # 找到匹配的任务（匹配文件夹名）
+        cursor.execute('SELECT id FROM monitor_tasks WHERE project_id IS ? AND date_str = ?', (project_id, date_str))
+        tasks = cursor.fetchall()
+
+        for task in tasks:
+            # 找到这个任务的问题
+            cursor.execute('SELECT id FROM questions WHERE task_id = ?', (task['id'],))
+            question_ids = [row['id'] for row in cursor.fetchall()]
+
+            for qid in question_ids:
+                # 删除品牌提及
+                cursor.execute('DELETE FROM brand_mentions WHERE question_id = ?', (qid,))
+                # 删除豆包引用链接
+                cursor.execute('DELETE FROM doubao_citations WHERE question_id = ?', (qid,))
+
+            # 删除问题
+            cursor.execute('DELETE FROM questions WHERE task_id = ?', (task['id'],))
+            # 删除任务
+            cursor.execute('DELETE FROM monitor_tasks WHERE id = ?', (task['id'],))
+
+        conn.commit()
+        conn.close()
+
+        return jsonify({'success': True})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
@@ -1196,6 +1296,8 @@ def api_geo_generate_content():
     question = data.get('question', '')
     brand_name = data.get('brand_name', '')
     project_id = data.get('project_id')
+    # 获取对比品牌列表（仅横向对比文使用）
+    competitor_brands = data.get('competitor_brands', [])
 
     # 1. 检索相关素材
     materials = []
@@ -1230,6 +1332,7 @@ def api_geo_generate_content():
             question,
             context_text,
             brand_name,
+            competitor_brands,  # 新增对比品牌
             config,
             _call_llm
         )
@@ -1635,6 +1738,239 @@ def api_geo_add_citation(comp_id):
         data.get('source_url')
     )
     return jsonify({'success': True, 'id': cit_id})
+
+
+# =============================================================================
+# 新增：GEO质量评分和竞品内容分析API
+# =============================================================================
+
+@app.route('/api/geo/content/score', methods=['POST'])
+def api_geo_content_score():
+    """对GEO内容进行质量评分"""
+    data = request.json
+    content = data.get('content', '')
+    brand_name = data.get('brand_name')
+
+    from src.geo.geo_quality_scorer import score_geo_content
+
+    try:
+        result = score_geo_content(content, brand_name)
+        return jsonify({'success': True, 'result': result})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+
+@app.route('/api/geo/citations/analyze', methods=['POST'])
+def api_geo_citations_analyze():
+    """分析豆包引用的内容"""
+    data = request.json
+    citations = data.get('citations', [])
+    use_llm = data.get('use_llm', True)
+
+    from src.geo.competitor_analyzer import CitationContentAnalyzer
+
+    try:
+        if use_llm:
+            # 如果需要LLM分析，创建LLM函数
+            config = load_config()
+
+            def llm_func(cfg, prompt):
+                from src.collector.monitor_analysis import _call_llm
+                return _call_llm(cfg, prompt)
+
+            # 注意：实际的内容抓取需要浏览器，这里先做简单分析
+            # 完整的抓取需要结合doubao_query的逻辑
+            analysis_result = CitationContentAnalyzer.analyze_citation_patterns(
+                [], llm_func, config
+            )
+        else:
+            # 不使用LLM，简单分析
+            analysis_result = CitationContentAnalyzer.analyze_citation_patterns([])
+
+        html_report = CitationContentAnalyzer.generate_html_report(
+            analysis_result, citations
+        )
+
+        return jsonify({
+            'success': True,
+            'result': analysis_result,
+            'html_report': html_report
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+
+@app.route('/api/geo/citations/import', methods=['POST'])
+def api_geo_citation_import():
+    """导入引用链接内容到文档库"""
+    data = request.json
+    url = data.get('url', '')
+    title = data.get('title', '')
+    project_id = data.get('project_id')
+
+    if not url:
+        return jsonify({'success': False, 'error': 'URL不能为空'})
+
+    from src.geo import DocumentProcessor
+
+    try:
+        # 先用简单方式抓取
+        content, extracted_title = simple_fetch_url(url)
+
+        if not content or len(content.strip()) < 50:
+            return jsonify({'success': False, 'error': '抓取内容太少，请稍后再试'})
+
+        # 保存到文档库
+        dp = DocumentProcessor()
+        doc_id = dp.save_document(
+            project_id=project_id,
+            original_filename=title or extracted_title or url[:50],
+            storage_path=url,
+            file_type='url',
+            file_size=len(content),
+            tags="豆包引用,竞品资料"
+        )
+
+        # 解析文档内容
+        dp.update_document_parsed(doc_id, content, len(content))
+
+        # 切分片段
+        chunks = dp.split_into_chunks(content)
+        dp.save_chunks(doc_id, chunks)
+
+        return jsonify({
+            'success': True,
+            'doc_id': doc_id,
+            'content_preview': content[:200]
+        })
+
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+
+@app.route('/api/geo/doubao-citations/<int:project_id>', methods=['GET'])
+def api_geo_doubao_citations(project_id):
+    """获取豆包引用链接列表（带分页和筛选）"""
+    try:
+        page = request.args.get('page', 1, type=int)
+        page_size = request.args.get('page_size', 20, type=int)
+        import_filter = request.args.get('import_filter', None)
+
+        offset = (page - 1) * page_size
+        result = models.get_doubao_citations(
+            project_id,
+            limit=page_size,
+            offset=offset,
+            import_filter=import_filter
+        )
+        return jsonify({'success': True, **result})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+
+@app.route('/api/geo/doubao-citations/<int:project_id>/<int:citation_id>/import', methods=['POST'])
+def api_geo_import_citation(project_id, citation_id):
+    """导入引用链接内容到文档库"""
+    try:
+        from src.geo import DocumentProcessor
+
+        # 获取引用链接
+        conn = models.get_connection()
+        cursor = conn.cursor()
+        cursor.execute('SELECT url FROM doubao_citations WHERE id = ?', (citation_id,))
+        row = cursor.fetchone()
+        conn.close()
+
+        if not row:
+            return jsonify({'success': False, 'error': '未找到引用链接'})
+
+        url = row['url']
+
+        # 抓取链接内容
+        content, title = simple_fetch_url(url)
+
+        if not content or len(content.strip()) < 50:
+            return jsonify({'success': False, 'error': '抓取内容太少，请稍后再试'})
+
+        # 保存到文档库
+        dp = DocumentProcessor()
+        doc_id = dp.save_document(
+            project_id=project_id,
+            original_filename=title or f"引用_{citation_id}.txt",
+            storage_path=url,
+            file_type='url',
+            file_size=len(content),
+            tags='豆包引用,竞品资料'
+        )
+
+        # 解析文档内容
+        dp.update_document_parsed(doc_id, content, len(content))
+
+        # 切分片段
+        chunks = dp.split_into_chunks(content)
+        dp.save_chunks(doc_id, chunks)
+
+        # 标记为已导入
+        models.mark_citation_imported(citation_id)
+
+        return jsonify({'success': True, 'doc_id': doc_id, 'content_preview': content[:200]})
+
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+
+def simple_fetch_url(url):
+    """简单抓取网页内容"""
+    import requests
+    from bs4 import BeautifulSoup
+
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+    }
+
+    try:
+        response = requests.get(url, headers=headers, timeout=30)
+        response.encoding = response.apparent_encoding
+
+        soup = BeautifulSoup(response.text, 'html.parser')
+
+        # 提取标题
+        title = ''
+        if soup.title:
+            title = soup.title.get_text().strip()
+
+        # 提取正文内容
+        # 移除不需要的元素
+        for element in soup(['script', 'style', 'nav', 'header', 'footer', 'aside']):
+            element.decompose()
+
+        # 尝试多种方式提取正文
+        content = ''
+
+        # 方式1: 找article或main标签
+        main_content = soup.find('article') or soup.find('main') or soup.find('div', class_=lambda x: x and 'content' in x.lower())
+
+        if main_content:
+            content = main_content.get_text(separator='\n', strip=True)
+
+        # 方式2: 如果没找到，找所有p标签
+        if not content or len(content) < 100:
+            paragraphs = soup.find_all('p')
+            content = '\n'.join([p.get_text(strip=True) for p in paragraphs])
+
+        # 方式3: 最后兜底
+        if not content or len(content) < 100:
+            content = soup.get_text(separator='\n', strip=True)
+
+        # 清理多余空行
+        lines = [line.strip() for line in content.split('\n') if line.strip()]
+        content = '\n'.join(lines)
+
+        return content, title
+
+    except Exception as e:
+        print(f"抓取失败: {e}")
+        return '', ''
 
 
 @app.route('/static/<path:path>')

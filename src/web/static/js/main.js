@@ -8,6 +8,8 @@ let trendChart = null;
 let positionChart = null;
 let trendStats = [];
 let isProjectManagementMode = false;
+let isFileManagementMode = false;
+let isTaskManagementMode = false;
 
 // GEO 关键词分页状态
 let currentKeywordPage = 1;
@@ -17,6 +19,8 @@ let keywordPaginationData = null;
 // 页面加载
 document.addEventListener('DOMContentLoaded', () => {
     loadProjects();
+    // 初始化内容类型切换
+    initContentTypeToggle();
 });
 
 // ========== 项目管理 ==========
@@ -721,11 +725,26 @@ async function loadFileDateList() {
             return;
         }
 
-        container.innerHTML = dates.map(date => `
-            <div class="date-item" onclick="showTaskList('${date}')">
-                <div class="date-item-title">${formatDate(date)}</div>
-            </div>
-        `).join('');
+        if (isFileManagementMode) {
+            // 管理模式：显示带删除按钮的列表
+            container.innerHTML = dates.map(date => `
+                <div class="date-item" style="display:flex;justify-content:space-between;align-items:center;gap:12px;padding:12px;">
+                    <div onclick="showTaskList('${date}')" style="flex:1;cursor:pointer;">
+                        <div class="date-item-title">${formatDate(date)}</div>
+                    </div>
+                    <button class="btn-delete-project" onclick="deleteDate(event, '${date}')" title="删除此日期">
+                        🗑️
+                    </button>
+                </div>
+            `).join('');
+        } else {
+            // 普通模式：只显示日期
+            container.innerHTML = dates.map(date => `
+                <div class="date-item" onclick="showTaskList('${date}')">
+                    <div class="date-item-title">${formatDate(date)}</div>
+                </div>
+            `).join('');
+        }
     } catch (error) {
         console.error('加载日期列表失败:', error);
     }
@@ -761,12 +780,26 @@ async function showTaskList(dateStr) {
             return;
         }
 
-        container.innerHTML = data.tasks.map(task => `
-            <div class="task-item" onclick="showTaskDetail('${task.folder}')">
-                <div class="task-item-title">${escapeHtml(task.folder)}</div>
-                <div class="task-item-question">${escapeHtml(task.question)}</div>
-            </div>
-        `).join('');
+        if (isTaskManagementMode) {
+            container.innerHTML = data.tasks.map(task => `
+                <div class="task-item" style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;">
+                    <div onclick="showTaskDetail('${task.folder}')" style="cursor:pointer;flex:1;">
+                        <div class="task-item-title">${escapeHtml(task.folder)}</div>
+                        <div class="task-item-question">${escapeHtml(task.question)}</div>
+                    </div>
+                    <button class="btn-delete-project" onclick="deleteTask(event, '${task.folder}')" title="删除此任务">
+                        🗑️
+                    </button>
+                </div>
+            `).join('');
+        } else {
+            container.innerHTML = data.tasks.map(task => `
+                <div class="task-item" onclick="showTaskDetail('${task.folder}')">
+                    <div class="task-item-title">${escapeHtml(task.folder)}</div>
+                    <div class="task-item-question">${escapeHtml(task.question)}</div>
+                </div>
+            `).join('');
+        }
 
         document.getElementById('taskSection').scrollIntoView({behavior: 'smooth'});
     } catch (error) {
@@ -774,9 +807,107 @@ async function showTaskList(dateStr) {
     }
 }
 
+function toggleTaskManagement() {
+    isTaskManagementMode = !isTaskManagementMode;
+    const btn = document.getElementById('manage-tasks-btn');
+
+    if (isTaskManagementMode) {
+        btn.textContent = '✓ 完成管理';
+        btn.classList.remove('btn-secondary');
+        btn.classList.add('btn-success');
+    } else {
+        btn.textContent = '⚙️ 管理删除';
+        btn.classList.remove('btn-success');
+        btn.classList.add('btn-secondary');
+    }
+
+    // 重新加载列表
+    if (currentDate) {
+        showTaskList(currentDate);
+    }
+}
+
+function toggleFileManagement() {
+    isFileManagementMode = !isFileManagementMode;
+    const btn = document.getElementById('manage-files-btn');
+
+    if (isFileManagementMode) {
+        btn.textContent = '✓ 完成管理';
+        btn.classList.remove('btn-primary');
+        btn.classList.add('btn-success');
+    } else {
+        btn.textContent = '⚙️ 管理删除';
+        btn.classList.remove('btn-success');
+        btn.classList.add('btn-primary');
+    }
+
+    // 重新加载列表
+    loadFileDateList();
+}
+
 function backToDateList() {
     document.getElementById('taskSection').style.display = 'none';
     document.getElementById('taskDetailSection').style.display = 'none';
+    // 重置任务管理模式
+    isTaskManagementMode = false;
+    const btn = document.getElementById('manage-tasks-btn');
+    if (btn) {
+        btn.textContent = '⚙️ 管理删除';
+        btn.classList.remove('btn-success');
+        btn.classList.add('btn-secondary');
+    }
+}
+
+async function deleteDate(event, dateStr) {
+    if (event) event.stopPropagation();
+    if (!currentProjectId) return;
+    if (!confirm(`确定要删除 ${formatDate(dateStr)} 的所有数据吗？这会同时删除文件和数据库记录！`)) return;
+
+    try {
+        const response = await fetch(`/api/projects/${currentProjectId}/date/${dateStr}`, {
+            method: 'DELETE'
+        });
+        const data = await response.json();
+
+        if (data.success) {
+            alert('删除成功！');
+            loadFileDateList();
+            backToDateList();
+            // 刷新仪表盘数据
+            if (typeof loadDashboardData === 'function') {
+                loadDashboardData();
+            } else if (typeof initDashboardView === 'function') {
+                initDashboardView();
+            }
+        } else {
+            alert('删除失败: ' + (data.error || '未知错误'));
+        }
+    } catch (error) {
+        alert('删除失败: ' + error.message);
+    }
+}
+
+async function deleteTask(event, taskFolder) {
+    if (event) event.stopPropagation();
+    if (!currentProjectId || !currentDate) return;
+    if (!confirm(`确定要删除任务 "${taskFolder}" 吗？`)) return;
+
+    try {
+        const response = await fetch(`/api/projects/${currentProjectId}/date/${currentDate}/task/${encodeURIComponent(taskFolder)}`, {
+            method: 'DELETE'
+        });
+        const data = await response.json();
+
+        if (data.success) {
+            alert('删除成功！');
+            showTaskList(currentDate); // 刷新列表
+            backToTaskList();
+        } else {
+            alert('删除失败: ' + (data.error || '未知错误'));
+        }
+    } catch (error) {
+        alert('删除失败: ' + error.message);
+    }
 }
 
 async function showTaskDetail(taskFolder) {
@@ -875,6 +1006,7 @@ async function toggleAnswer(dateStr, taskFolder, answerFile, idx) {
         btn.textContent = '展开查看';
     }
 }
+
 
 function backToTaskList() {
     document.getElementById('taskDetailSection').style.display = 'none';
@@ -1601,7 +1733,7 @@ function showGeoView(viewName) {
             document.getElementById('geoContentBrand').value = currentProjectName;
         }
     } else if (viewName === 'competitors') {
-        loadCompetitorData();
+        loadDoubaoCitations();
     }
 }
 
@@ -2432,6 +2564,86 @@ async function deleteSummary(summaryId) {
 let allKeywordsForSelector = [];
 let currentKeywordTierFilter = 'all';
 
+// 内容类型切换时显示/隐藏对比品牌区域
+function initContentTypeToggle() {
+    const contentTypeSelect = document.getElementById('geoContentType');
+    if (contentTypeSelect) {
+        contentTypeSelect.addEventListener('change', function() {
+            toggleComparisonBrandsGroup(this.value);
+        });
+        // 初始化
+        toggleComparisonBrandsGroup(contentTypeSelect.value);
+    }
+}
+
+function toggleComparisonBrandsGroup(contentType) {
+    const group = document.getElementById('comparisonBrandsGroup');
+    if (group) {
+        group.style.display = contentType === 'comparison' ? 'block' : 'none';
+    }
+}
+
+// 添加对比品牌
+function addComparisonBrand() {
+    const container = document.getElementById('comparisonBrandInputs');
+    if (!container) return;
+
+    const inputs = container.querySelectorAll('.comparison-brand-input');
+    if (inputs.length >= 4) {
+        alert('最多只能添加4个对比品牌');
+        return;
+    }
+
+    const newInput = document.createElement('div');
+    newInput.className = 'comparison-brand-input';
+    newInput.style.cssText = 'display: flex; gap: 8px; margin-bottom: 8px;';
+    newInput.innerHTML = `
+        <input type="text" class="form-input comparison-brand" placeholder="例如: 星颜塑" style="flex: 1;">
+        <button type="button" class="btn-small btn-danger" onclick="removeComparisonBrand(this)">删除</button>
+    `;
+    container.appendChild(newInput);
+
+    // 显示所有删除按钮
+    updateRemoveButtonsVisibility();
+}
+
+// 删除对比品牌
+function removeComparisonBrand(btn) {
+    const container = document.getElementById('comparisonBrandInputs');
+    if (!container) return;
+
+    const inputGroup = btn.parentElement;
+    inputGroup.remove();
+
+    updateRemoveButtonsVisibility();
+}
+
+// 更新删除按钮的可见性
+function updateRemoveButtonsVisibility() {
+    const container = document.getElementById('comparisonBrandInputs');
+    if (!container) return;
+
+    const inputs = container.querySelectorAll('.comparison-brand-input');
+    const deleteBtns = container.querySelectorAll('.btn-danger');
+
+    deleteBtns.forEach(btn => {
+        btn.style.display = inputs.length > 1 ? 'inline-block' : 'none';
+    });
+}
+
+// 获取对比品牌列表
+function getComparisonBrands() {
+    const inputs = document.querySelectorAll('.comparison-brand-input .comparison-brand');
+    const brands = [];
+    inputs.forEach(input => {
+        const value = input.value.trim();
+        if (value) {
+            brands.push(value);
+        }
+    });
+    return brands;
+}
+
 async function generateGEOContent() {
     if (!currentProjectId) return;
     const contentType = document.getElementById('geoContentType').value;
@@ -2445,19 +2657,36 @@ async function generateGEOContent() {
         return;
     }
 
+    // 如果是横向对比文，检查对比品牌
+    let competitorBrands = [];
+    if (contentType === 'comparison') {
+        competitorBrands = getComparisonBrands();
+        if (competitorBrands.length === 0) {
+            alert('请至少添加1个对比品牌');
+            return;
+        }
+    }
+
     try {
         btn.textContent = '⏳ 正在检索素材...';
         btn.disabled = true;
 
+        const requestBody = {
+            project_id: currentProjectId,
+            type: contentType,
+            question,
+            brand_name: brandName
+        };
+
+        // 如果是横向对比文，添加对比品牌
+        if (contentType === 'comparison') {
+            requestBody.competitor_brands = competitorBrands;
+        }
+
         const response = await fetch('/api/geo/content/generate', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({
-                project_id: currentProjectId,
-                type: contentType,
-                question,
-                brand_name: brandName
-            })
+            body: JSON.stringify(requestBody)
         });
 
         btn.textContent = '⏳ 正在生成文章...';
@@ -2613,6 +2842,95 @@ async function checkGeoContent() {
     }
 }
 
+async function scoreGeoContent() {
+    const content = document.getElementById('geoContentPreview').value;
+    const brandName = document.getElementById('geoContentBrand').value;
+    if (!content) {
+        alert('请先生成内容');
+        return;
+    }
+
+    const resultDiv = document.getElementById('geoScoreResult');
+    resultDiv.innerHTML = '<div style="color:#667eea">⏳ 正在评分...</div>';
+
+    try {
+        const response = await fetch('/api/geo/content/score', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({content, brand_name: brandName || null})
+        });
+        const data = await response.json();
+        if (data.success) {
+            const result = data.result;
+            const gradeColor = getGradeColor(result.grade);
+
+            let dimensionsHtml = '';
+            for (const [key, dim] of Object.entries(result.dimensions)) {
+                const dimColor = dim.score >= 80 ? '#22c55e' : dim.score >= 60 ? '#f59e0b' : '#ef4444';
+                dimensionsHtml += `
+                    <div style="margin-bottom:10px;">
+                        <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
+                            <span style="color:#444;">${dim.name}</span>
+                            <span style="color:${dimColor};font-weight:bold;">${dim.score}分</span>
+                        </div>
+                        <div style="background:#e5e7eb;height:8px;border-radius:4px;overflow:hidden;">
+                            <div style="background:${dimColor};height:100%;width:${dim.score}%;border-radius:4px;"></div>
+                        </div>
+                    </div>
+                `;
+            }
+
+            let feedbackHtml = '';
+            if (result.all_feedback && result.all_feedback.length > 0) {
+                feedbackHtml = `
+                    <div style="margin-top:16px;">
+                        <h4 style="margin-bottom:8px;color:#444;">💡 优化建议</h4>
+                        <ul style="margin:0;padding-left:20px;color:#666;">
+                            ${result.all_feedback.map(f => `<li style="margin-bottom:4px;">${escapeHtml(f)}</li>`).join('')}
+                        </ul>
+                    </div>
+                `;
+            }
+
+            resultDiv.innerHTML = `
+                <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:16px;">
+                    <div style="display:flex;align-items:center;gap:16px;margin-bottom:16px;">
+                        <div style="width:80px;height:80px;border-radius:50%;background:${gradeColor};display:flex;flex-direction:column;align-items:center;justify-content:center;color:white;">
+                            <span style="font-size:24px;font-weight:bold;">${result.overall_score}</span>
+                            <span style="font-size:14px;">等级 ${result.grade}</span>
+                        </div>
+                        <div>
+                            <div style="font-size:18px;font-weight:bold;color:#333;margin-bottom:4px;">
+                                ${result.passed ? '✅ 内容质量良好' : '⚠️ 需要优化'}
+                            </div>
+                            <div style="color:#666;">${result.summary}</div>
+                        </div>
+                    </div>
+                    <div style="border-top:1px solid #e2e8f0;padding-top:16px;">
+                        <h4 style="margin-bottom:12px;color:#444;">📊 各维度评分</h4>
+                        ${dimensionsHtml}
+                    </div>
+                    ${feedbackHtml}
+                </div>
+            `;
+        }
+    } catch (error) {
+        resultDiv.innerHTML = `<div style="color:#ef4444;">❌ 评分失败: ${escapeHtml(error.message)}</div>`;
+        console.error('评分失败:', error);
+    }
+}
+
+function getGradeColor(grade) {
+    const colors = {
+        'S': '#22c55e',
+        'A': '#667eea',
+        'B': '#f59e0b',
+        'C': '#f97316',
+        'D': '#ef4444'
+    };
+    return colors[grade] || '#999';
+}
+
 // ========== 竞品分析 ==========
 
 async function loadCompetitorData() {
@@ -2669,6 +2987,245 @@ function renderGapAnalysis(gap) {
         html += `<div style="margin-top:10px;color:#666">${gap.suggestions.join('')}</div>`;
     }
     container.innerHTML = html;
+}
+
+// 豆包引用分页状态
+let citationCurrentPage = 1;
+let citationPageSize = 5;
+let citationPaginationData = null;
+
+async function loadDoubaoCitations(resetPage = true) {
+    if (!currentProjectId) return;
+
+    if (resetPage) {
+        citationCurrentPage = 1;
+    }
+
+    const container = document.getElementById('doubaoCitationList');
+    const paginationContainer = document.getElementById('doubaoCitationPagination');
+    container.innerHTML = '<div style="text-align:center;padding:20px;">加载中...</div>';
+    paginationContainer.innerHTML = '';
+
+    const importFilter = document.getElementById('citationImportFilter')?.value || '';
+
+    try {
+        const params = new URLSearchParams({
+            page: citationCurrentPage,
+            page_size: citationPageSize,
+            ...(importFilter && { import_filter: importFilter })
+        });
+
+        const response = await fetch(`/api/geo/doubao-citations/${currentProjectId}?${params}`);
+        const data = await response.json();
+
+        if (!data.success) {
+            container.innerHTML = `<div style="color:#ef4444;">加载失败: ${data.error}</div>`;
+            return;
+        }
+
+        citationPaginationData = data;
+
+        if (!data.items || data.items.length === 0) {
+            container.innerHTML = `
+                <div style="background:#fffbea;padding:12px;border-radius:6px;border:1px solid #fde68a;">
+                    <div style="font-weight:bold;color:#92400e;margin-bottom:8px;">💡 暂无引用链接</div>
+                    <ol style="color:#78350f;margin:0;padding-left:20px;line-height:1.6;">
+                        <li>去"任务控制"页面运行一次监测任务</li>
+                        <li>如果豆包回答里有引用链接，会自动提取到这里</li>
+                        <li>点击"导入"按钮抓取链接内容存文档库</li>
+                    </ol>
+                </div>
+            `;
+            return;
+        }
+
+        container.innerHTML = data.items.map(cite => `
+            <div class="competitor-card" style="margin-bottom:12px;">
+                <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;">
+                    <div style="flex:1;min-width:0;">
+                        <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+                            <span style="font-weight:bold;">📅 ${cite.date_str}</span>
+                            ${cite.is_imported ? '<span style="background:#10b981;color:white;padding:2px 8px;border-radius:12px;font-size:0.8em;">已导入</span>' : ''}
+                        </div>
+                        <div style="color:#374151;margin-bottom:4px;">❓ ${escapeHtml(cite.question_text || '')}</div>
+                        <div style="color:#6b7280;font-size:0.9em;word-break:break-all;margin-bottom:4px;">
+                            🔗 <a href="${escapeHtml(cite.url)}" target="_blank" style="color:#3b82f6;">${escapeHtml(cite.url)}</a>
+                        </div>
+                        ${cite.context_snippet ? `<div style="color:#9ca3af;font-size:0.85em;background:#f3f4f6;padding:8px;border-radius:4px;">${escapeHtml(cite.context_snippet)}</div>` : ''}
+                    </div>
+                    <button class="btn-small btn-primary" onclick="importCitation(${cite.id})" ${cite.is_imported ? 'disabled style="opacity:0.5;cursor:not-allowed;"' : ''}>
+                        📥 导入
+                    </button>
+                </div>
+            </div>
+        `).join('');
+
+        // 渲染分页
+        renderCitationPagination();
+
+    } catch (error) {
+        container.innerHTML = `<div style="color:#ef4444;">加载失败: ${error.message}</div>`;
+    }
+}
+
+function renderCitationPagination() {
+    const container = document.getElementById('doubaoCitationPagination');
+    if (!container || !citationPaginationData) return;
+
+    const {page, page_size, total, total_pages} = citationPaginationData;
+
+    if (total === 0) {
+        container.innerHTML = '';
+        return;
+    }
+
+    let html = '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;padding:8px 0;">';
+
+    // 每页条数选择
+    html += `
+        <div style="display:flex;align-items:center;gap:8px;">
+            <span style="color:#666;font-size:0.9em;">每页:</span>
+            <select onchange="changeCitationPageSize(this.value)" style="padding:4px 8px;border-radius:4px;border:1px solid #d1d5db;">
+                <option value="5" ${citationPageSize === 5 ? 'selected' : ''}>5条</option>
+                <option value="10" ${citationPageSize === 10 ? 'selected' : ''}>10条</option>
+            </select>
+        </div>
+    `;
+
+    // 分页信息
+    const start = (page - 1) * page_size + 1;
+    const end = Math.min(page * page_size, total);
+    html += `<span style="color:#666;font-size:0.9em;">显示 ${start}-${end} 条，共 ${total} 条</span>`;
+
+    // 分页按钮
+    html += '<div style="display:flex;gap:4px;">';
+    html += `<button class="btn-small btn-secondary" onclick="goToCitationPage(1)" ${page === 1 ? 'disabled style="opacity:0.5;cursor:not-allowed;"' : ''}>首页</button>`;
+    html += `<button class="btn-small btn-secondary" onclick="goToCitationPage(${page - 1})" ${page === 1 ? 'disabled style="opacity:0.5;cursor:not-allowed;"' : ''}>上一页</button>`;
+    html += `<span style="color:#666;padding:4px 8px;font-size:0.9em;">第 ${page} / ${total_pages} 页</span>`;
+    html += `<button class="btn-small btn-secondary" onclick="goToCitationPage(${page + 1})" ${page === total_pages ? 'disabled style="opacity:0.5;cursor:not-allowed;"' : ''}>下一页</button>`;
+    html += `<button class="btn-small btn-secondary" onclick="goToCitationPage(${total_pages})" ${page === total_pages ? 'disabled style="opacity:0.5;cursor:not-allowed;"' : ''}>末页</button>`;
+    html += '</div>';
+
+    html += '</div>';
+    container.innerHTML = html;
+}
+
+function goToCitationPage(page) {
+    if (!citationPaginationData) return;
+    if (page < 1 || page > citationPaginationData.total_pages) return;
+    citationCurrentPage = page;
+    loadDoubaoCitations(false);
+}
+
+function changeCitationPageSize(size) {
+    citationPageSize = parseInt(size);
+    citationCurrentPage = 1;
+    loadDoubaoCitations(false);
+}
+
+async function importCitation(citationId) {
+    if (!currentProjectId) return;
+
+    try {
+        const response = await fetch(`/api/geo/doubao-citations/${currentProjectId}/${citationId}/import`, {
+            method: 'POST'
+        });
+        const data = await response.json();
+
+        if (data.success) {
+            alert('✅ 已导入到文档库！');
+            loadDoubaoCitations(citationCurrentPage); // 刷新当前页
+        } else {
+            alert('导入失败: ' + (data.error || '未知错误'));
+        }
+    } catch (error) {
+        alert('导入失败: ' + error.message);
+    }
+}
+
+async function manualImportUrl() {
+    const urlInput = document.getElementById('manualImportUrl');
+    const url = urlInput.value.trim();
+
+    if (!url) {
+        alert('请输入URL');
+        return;
+    }
+
+    if (!url.startsWith('http://') && !url.startsWith('https://')) {
+        alert('URL必须以 http:// 或 https:// 开头');
+        return;
+    }
+
+    // 从URL中提取标题（用域名作为默认标题）
+    let title = '';
+    try {
+        const urlObj = new URL(url);
+        title = urlObj.hostname;
+    } catch {
+        title = '导入的文章';
+    }
+
+    await importCitationToDocs(url, title);
+
+    // 清空输入框
+    urlInput.value = '';
+}
+
+async function importCitationToDocs(url, title) {
+    if (!confirm(`确定要导入这个链接到文档库吗？\n\n${title || url}`)) {
+        return;
+    }
+
+    try {
+        const response = await fetch('/api/geo/citations/import', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                url: url,
+                title: title,
+                project_id: currentProjectId
+            })
+        });
+
+        const data = await response.json();
+        if (data.success) {
+            alert(`✅ 导入成功！\n\n已保存到文档库。\n\n内容预览: ${data.content_preview || ''}`);
+        } else {
+            alert(`❌ 导入失败: ${data.error || '未知错误'}`);
+        }
+    } catch (error) {
+        alert(`❌ 导入失败: ${error.message}`);
+    }
+}
+
+async function analyzeDoubaoCitations() {
+    const citations = window.currentCitations || [];
+    const resultDiv = document.getElementById('citationAnalysisResult');
+
+    if (citations.length === 0) {
+        alert('请先加载引用数据');
+        return;
+    }
+
+    resultDiv.innerHTML = '<div style="color:#667eea">⏳ 正在分析...</div>';
+
+    try {
+        const response = await fetch('/api/geo/citations/analyze', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({citations, use_llm: true})
+        });
+        const data = await response.json();
+        if (data.success) {
+            resultDiv.innerHTML = data.html_report || '<div style="color:#22c55e;">✅ 分析完成</div>';
+        } else {
+            resultDiv.innerHTML = `<div style="color:#ef4444;">❌ 分析失败: ${escapeHtml(data.error || '')}</div>`;
+        }
+    } catch (error) {
+        resultDiv.innerHTML = `<div style="color:#ef4444;">❌ 分析失败: ${escapeHtml(error.message)}</div>`;
+        console.error('分析失败:', error);
+    }
 }
 
 function openAddCompetitorModal() {

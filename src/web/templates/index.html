@@ -5,6 +5,20 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>GEO 品牌监测仪表盘</title>
     <link rel="stylesheet" href="/static/css/style.css?v=14">
+    <style>
+        .btn-danger {
+            background: #ef4444 !important;
+            border-color: #dc2626 !important;
+            color: white !important;
+        }
+        .btn-danger:hover {
+            background: #dc2626 !important;
+        }
+        .btn-danger:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+    </style>
 </head>
 <body>
     <div class="container">
@@ -155,13 +169,21 @@
                     <!-- 文件浏览视图 -->
                     <div id="filesView" class="view">
                         <section class="data-section">
-                            <h3>📅 选择日期</h3>
+                            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+                                <h3 style="margin:0;">📅 选择日期</h3>
+                                <button class="btn-small btn-primary" id="manage-files-btn" onclick="toggleFileManagement()">⚙️ 管理删除</button>
+                            </div>
                             <div id="fileDateList" class="date-list"></div>
                         </section>
 
                         <section class="data-section" id="taskSection" style="display: none;">
-                            <h3>📂 任务列表: <span id="taskDate"></span></h3>
-                            <button class="back-btn" onclick="backToDateList()">← 返回日期列表</button>
+                            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+                                <h3 style="margin:0;">📂 任务列表: <span id="taskDate"></span></h3>
+                                <div style="display:flex;gap:8px;align-items:center;">
+                                    <button class="btn-small btn-secondary" onclick="toggleTaskManagement()" id="manage-tasks-btn">⚙️ 管理删除</button>
+                                    <button class="back-btn" onclick="backToDateList()">← 返回日期列表</button>
+                                </div>
+                            </div>
                             <div id="taskList" class="task-list"></div>
                         </section>
 
@@ -188,7 +210,7 @@
                             <button class="geo-nav-btn active" onclick="showGeoView('documents')">📚 文档库</button>
                             <button class="geo-nav-btn" onclick="showGeoView('keywords')">🔑 关键词库</button>
                             <button class="geo-nav-btn" onclick="showGeoView('content')">✍️ 内容生产</button>
-                            <button class="geo-nav-btn" onclick="showGeoView('competitors')">🏆 竞品分析</button>
+                            <button class="geo-nav-btn" onclick="showGeoView('competitors')">🔗 豆包引用</button>
                         </nav>
 
                         <!-- 关键词库视图 -->
@@ -252,8 +274,19 @@
                                     </div>
                                 </div>
                                 <div class="form-group">
-                                    <label>品牌名</label>
-                                    <input type="text" id="geoContentBrand" class="form-input" placeholder="例如: 完形康躰">
+                                    <label>⭐ 主品牌（对比第一名）</label>
+                                    <input type="text" id="geoContentBrand" class="form-input" placeholder="例如: 再生道">
+                                </div>
+                                <div class="form-group" id="comparisonBrandsGroup" style="display: none;">
+                                    <label>对比品牌列表</label>
+                                    <div id="comparisonBrandInputs">
+                                        <div class="comparison-brand-input" style="display: flex; gap: 8px; margin-bottom: 8px;">
+                                            <input type="text" class="form-input comparison-brand" placeholder="例如: 睿博恩" style="flex: 1;">
+                                            <button type="button" class="btn-small btn-danger" onclick="removeComparisonBrand(this)" style="display: none;">删除</button>
+                                        </div>
+                                    </div>
+                                    <button type="button" class="btn-small btn-secondary" onclick="addComparisonBrand()">+ 添加品牌</button>
+                                    <p style="font-size: 0.85em; color: #666; margin-top: 8px;">至少添加1个对比品牌，最多4个</p>
                                 </div>
                                 <div style="margin-bottom:16px;">
                                     <button class="report-btn" onclick="generateGEOContent()">✨ 生成内容</button>
@@ -262,7 +295,9 @@
                                 <h4>📝 内容预览</h4>
                                 <textarea id="geoContentPreview" class="form-input" rows="15" style="font-family: monospace; font-size: 0.9em;"></textarea>
                                 <div style="margin-top: 12px;">
+                                    <button class="btn-small btn-primary" onclick="scoreGeoContent()">📊 GEO质量评分</button>
                                     <button class="btn-small btn-secondary" onclick="checkGeoContent()">🔍 检查GEO规范</button>
+                                    <div id="geoScoreResult" style="margin-top: 10px;"></div>
                                     <div id="geoCheckResult" style="margin-top: 10px;"></div>
                                 </div>
                             </div>
@@ -294,16 +329,38 @@
                             </div>
                         </div>
 
-                        <!-- 竞品分析视图 -->
+                        <!-- 豆包引用视图 -->
                         <div id="geoCompetitorsView" class="geo-subview" style="display: none;">
                             <div class="geo-section-header">
-                                <h3>🏆 竞品分析</h3>
-                                <button class="btn-small btn-primary" onclick="openAddCompetitorModal()">+ 添加竞品</button>
+                                <h3>🔗 豆包引用</h3>
                             </div>
-                            <div id="geoCompetitorList" class="geo-list" style="margin-bottom: 16px;"></div>
+
+                            <!-- 豆包引用链接 -->
                             <section class="data-section">
-                                <h4>🔍 空白分析</h4>
-                                <div id="geoGapAnalysis"></div>
+                                <p style="font-size: 0.9em; color: #666; margin-bottom: 12px;">豆包回答中引用的外部链接，可一键抓取内容存文档库</p>
+
+                                <!-- 手动导入URL -->
+                                <div style="background:#f0f9ff;padding:12px;border-radius:6px;margin-bottom:12px;border:1px solid #bae6fd;">
+                                    <div style="font-weight:bold;color:#0369a1;margin-bottom:8px;">📥 手动导入URL</div>
+                                    <div style="display:flex;gap:8px;">
+                                        <input type="text" id="manualImportUrl" class="form-input" placeholder="粘贴要导入的网页链接..." style="flex:1;">
+                                        <button class="btn-small btn-primary" onclick="manualImportUrl()">导入</button>
+                                    </div>
+                                </div>
+
+                                <div style="display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; align-items: center;">
+                                    <button class="btn-small btn-secondary" onclick="loadDoubaoCitations()">🔄 刷新引用链接</button>
+                                    <div style="display: flex; align-items: center; gap: 8px;">
+                                        <span style="font-size: 0.9em; color: #666;">筛选:</span>
+                                        <select id="citationImportFilter" class="form-input" style="width: auto; padding: 6px 10px;" onchange="loadDoubaoCitations()">
+                                            <option value="">全部</option>
+                                            <option value="not_imported">未导入</option>
+                                            <option value="imported">已导入</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div id="doubaoCitationList" style="margin-bottom: 12px;"></div>
+                                <div id="doubaoCitationPagination" style="display: flex; justify-content: center; align-items: center; gap: 8px; margin-top: 12px;"></div>
                             </section>
                         </div>
                     </div>
@@ -634,6 +691,6 @@
     <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
     <!-- Marked.js for Markdown rendering -->
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-    <script src="/static/js/main.js?v=15"></script>
+    <script src="/static/js/main.js?v=20"></script>
 </body>
 </html>

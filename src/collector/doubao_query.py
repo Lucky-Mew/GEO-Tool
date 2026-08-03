@@ -293,33 +293,55 @@ def _extract_doubao_response(page) -> dict:
         except Exception:
             pass
 
-    # 提取参考链接
+    # 提取参考链接 - 只找参考资料区域
     try:
         citations = page.evaluate("""
         () => {
             const out = [];
             const seen = new Set();
-            for (const a of document.querySelectorAll('a[href^="http"]')) {
-                let href = a.getAttribute('href') || '';
-                if (!href) continue;
-                if (href.includes('doubao.com') || href.includes('bytedance') || href.includes('byteimg') || href.includes('volccdn') || href.includes('w3.org')) continue;
-                if (seen.has(href)) continue;
-                seen.add(href);
-                const text = (a.innerText || '').trim();
-                out.push({title: text.slice(0, 200), url: href});
-            }
-            const all = Array.from(document.querySelectorAll('div, li, article'));
-            for (const el of all) {
+
+            // 第一步：优先找参考资料区域
+            let refArea = null;
+            const allDivs = Array.from(document.querySelectorAll('div, section'));
+            for (const el of allDivs) {
                 const txt = (el.innerText || '').trim();
-                if (!txt || txt.length > 500) continue;
-                const m = txt.match(/https?:\\/\\/[^\\s\\)\\]\\>]+/);
-                if (m) {
-                    const url = m[0];
-                    if (url.includes('doubao.com') || url.includes('bytedance') || url.includes('byteimg') || url.includes('volccdn') || url.includes('w3.org')) continue;
-                    if (seen.has(url)) continue;
-                    seen.add(url);
-                    const title = txt.replace(url, '').trim().slice(0, 200);
-                    out.push({title: title, url: url});
+                if (/参考\\s*\\d+\\s*篇|参考\\s*\\d+\\s*个|搜索\\s*\\d+\\s*个|引用\\s*\\d+\\s*条/.test(txt)) {
+                    refArea = el;
+                    break;
+                }
+            }
+
+            if (refArea) {
+                // 找到了参考区域，只从这个区域提取
+                const links = refArea.querySelectorAll('a[href^="http"]');
+                for (const a of links) {
+                    let href = a.getAttribute('href') || '';
+                    if (!href) continue;
+                    if (href.includes('doubao.com') || href.includes('bytedance') || href.includes('byteimg') || href.includes('volccdn') || href.includes('w3.org')) continue;
+                    if (seen.has(href)) continue;
+                    seen.add(href);
+                    const text = (a.innerText || '').trim();
+                    out.push({title: text.slice(0, 200), url: href});
+                }
+            } else {
+                // 没找到参考区域，兜底：从最新的回答里提取
+                const mdNodes = Array.from(document.querySelectorAll('[class*="md-box-root"], [class*="markdown"]'));
+                if (mdNodes.length) {
+                    const sorted = mdNodes.map(n => ({n: n, t: (n.innerText || '').trim()})).filter(x => x.t.length > 80);
+                    if (sorted.length) {
+                        sorted.sort((a, b) => b.t.length - a.t.length);
+                        const answerNode = sorted[0].n;
+                        const links = answerNode.querySelectorAll('a[href^="http"]');
+                        for (const a of links) {
+                            let href = a.getAttribute('href') || '';
+                            if (!href) continue;
+                            if (href.includes('doubao.com') || href.includes('bytedance') || href.includes('byteimg') || href.includes('volccdn') || href.includes('w3.org')) continue;
+                            if (seen.has(href)) continue;
+                            seen.add(href);
+                            const text = (a.innerText || '').trim();
+                            out.push({title: text.slice(0, 200), url: href});
+                        }
+                    }
                 }
             }
             return out;

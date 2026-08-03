@@ -15,10 +15,11 @@ from .keyword_manager import KeywordManager
 from .material_manager import MaterialManager
 from .content_helper import ContentTemplate
 from .hit_tracker import HitTracker
-from .competitor_analyzer import CompetitorAnalyzer
+from .competitor_analyzer import CompetitorAnalyzer, CitationContentAnalyzer
 from .plan_manager import PlanManager
 from .document_processor import DocumentProcessor
 from .vector_store import RetrievalEngine, build_context_for_generation
+from .geo_quality_scorer import GEOQualityScorer, score_geo_content
 
 __all__ = [
     'KeywordManager',
@@ -26,8 +27,11 @@ __all__ = [
     'ContentTemplate',
     'HitTracker',
     'CompetitorAnalyzer',
+    'CitationContentAnalyzer',
     'PlanManager',
     'DocumentProcessor',
     'RetrievalEngine',
     'build_context_for_generation',
+    'GEOQualityScorer',
+    'score_geo_content',
 ]
