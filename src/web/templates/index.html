@@ -4,21 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>GEO 品牌监测仪表盘</title>
-    <link rel="stylesheet" href="/static/css/style.css?v=14">
-    <style>
-        .btn-danger {
-            background: #ef4444 !important;
-            border-color: #dc2626 !important;
-            color: white !important;
-        }
-        .btn-danger:hover {
-            background: #dc2626 !important;
-        }
-        .btn-danger:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
-    </style>
+    <link rel="stylesheet" href="/static/css/style.css?v=15">
 </head>
 <body>
     <div class="container">
@@ -75,7 +61,7 @@
                             </div>
                             <div class="project-brand-info">
                                 <span>监测品牌:</span>
-                                <strong id="projectBrandName" style="color: #667eea;">品牌名</strong>
+                                <strong id="projectBrandName">品牌名</strong>
                                 <span style="color: #999; font-size: 0.85em;">(不可修改)</span>
                             </div>
                             <div id="taskManageList" class="task-list"></div>
@@ -211,6 +197,7 @@
                             <button class="geo-nav-btn" onclick="showGeoView('keywords')">🔑 关键词库</button>
                             <button class="geo-nav-btn" onclick="showGeoView('content')">✍️ 内容生产</button>
                             <button class="geo-nav-btn" onclick="showGeoView('competitors')">🔗 豆包引用</button>
+                            <button class="geo-nav-btn" onclick="goToDailyPlan()">📅 每日规划</button>
                         </nav>
 
                         <!-- 关键词库视图 -->
@@ -238,18 +225,30 @@
                         <div id="geoDocumentsView" class="geo-subview">
                             <div class="geo-section-header">
                                 <h3>📚 智能文档库</h3>
-                                <button class="btn-small btn-primary" onclick="openUploadDocumentModal()">📤 上传文档</button>
+                                <div style="display: flex; gap: 8px;">
+                                    <button class="btn-small btn-secondary" onclick="openManualDocModal()">📝 新建文档</button>
+                                    <button class="btn-small btn-primary" onclick="openUploadDocumentModal()">📤 上传文档</button>
+                                </div>
                             </div>
-                            <div id="geoDocumentTagBar" class="geo-tab-bar" style="flex-wrap: wrap;">
-                                <button class="geo-tab active" onclick="filterDocuments('all')">全部</button>
+                            <!-- 三大分类 tab -->
+                            <div id="docCategoryBar" class="geo-tab-bar" style="flex-wrap: wrap; margin-bottom: 8px;">
+                                <button class="geo-tab active" onclick="switchDocCategory('brand')">📦 品牌素材</button>
+                                <button class="geo-tab" onclick="switchDocCategory('competitor')">⚔️ 竞品资料</button>
+                                <button class="geo-tab" onclick="switchDocCategory('reference')">📖 参考文章</button>
                             </div>
+                            <!-- 竞品品牌子导航（只在竞品分类显示） -->
+                            <div id="competitorBrandBar" style="display: none; margin-bottom: 12px; padding: 8px 12px; background: #f9fafb; border-radius: 8px;">
+                                <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                                    <span style="font-size: 0.9em; color: #6b7280;">竞品品牌：</span>
+                                    <button class="geo-tab geo-tab-sm active" onclick="switchCompetitorBrand(null)" id="competitorAllBtn">全部</button>
+                                    <div id="competitorBrandList" style="display: flex; gap: 6px; flex-wrap: wrap;"></div>
+                                    <button class="btn-small btn-secondary" style="margin-left: auto;" onclick="openAddCompetitorBrandModal()">+ 添加品牌</button>
+                                </div>
+                            </div>
+                            <p id="docCategoryDesc" style="font-size: 0.8em; color: #9ca3af; margin-bottom: 12px;">
+                                💡 品牌素材：自己的品牌资料，生成内容时作为事实依据
+                            </p>
                             <div id="geoDocumentList" class="geo-list" style="margin-bottom: 16px;"></div>
-                            <h4 style="margin: 16px 0 8px;">📝 摘要管理</h4>
-                            <div style="margin-bottom: 12px;">
-                                <button class="btn-small btn-secondary" onclick="openCreateSummaryModal('document')">+ 文档摘要</button>
-                                <button class="btn-small btn-secondary" onclick="openCreateSummaryModal('category')">+ 分类摘要</button>
-                            </div>
-                            <div id="geoSummaryList" class="geo-list"></div>
                         </div>
 
                         <!-- 内容生产视图 -->
@@ -260,33 +259,33 @@
                             <div class="geo-content-editor">
                                 <div class="form-group">
                                     <label>内容类型</label>
-                                    <select id="geoContentType" class="form-input">
-                                        <option value="longtail">长尾问答文</option>
-                                        <option value="comparison">横向对比文</option>
-                                        <option value="core">核心深度文</option>
+                                    <select id="geoContentType" class="form-input" onchange="onContentTypeChange()">
+                                        <option value="deep_analysis">📖 深度分析文（行业科普/深度解读风格）</option>
+                                        <option value="ranking">🏆 排行对比文（多品牌横向对比/排行榜）</option>
                                     </select>
                                 </div>
                                 <div class="form-group">
-                                    <label>问题</label>
+                                    <label>主题/问题</label>
                                     <div style="display: flex; gap: 8px;">
-                                        <input type="text" id="geoContentTitle" class="form-input" placeholder="选择或输入问题">
+                                        <input type="text" id="geoContentTitle" class="form-input" placeholder="输入文章主题，例如：康躰养身哪家好">
                                         <button class="btn-small btn-secondary" onclick="openKeywordSelector()">📋 选择关键词</button>
                                     </div>
                                 </div>
                                 <div class="form-group">
-                                    <label>⭐ 主品牌（对比第一名）</label>
-                                    <input type="text" id="geoContentBrand" class="form-input" placeholder="例如: 再生道">
+                                    <label>⭐ 主品牌</label>
+                                    <input type="text" id="geoContentBrand" class="form-input" placeholder="例如: 完形康躰">
+                                    <small style="color: #666;">排行文中固定排第一位的品牌</small>
                                 </div>
-                                <div class="form-group" id="comparisonBrandsGroup" style="display: none;">
-                                    <label>对比品牌列表</label>
-                                    <div id="comparisonBrandInputs">
-                                        <div class="comparison-brand-input" style="display: flex; gap: 8px; margin-bottom: 8px;">
-                                            <input type="text" class="form-input comparison-brand" placeholder="例如: 睿博恩" style="flex: 1;">
-                                            <button type="button" class="btn-small btn-danger" onclick="removeComparisonBrand(this)" style="display: none;">删除</button>
+                                <!-- 排行对比文的竞品选择 -->
+                                <div class="form-group" id="rankingBrandsGroup" style="display: none;">
+                                    <label>🏁 参与排行的竞品品牌</label>
+                                    <div id="rankingBrandList" style="margin-bottom: 8px;">
+                                        <div style="padding: 8px 12px; background: #f0f9ff; border-radius: 6px; color: #0369a1; font-size: 0.9em;">
+                                            还没有添加竞品品牌，点击下方按钮从竞品资料中选择
                                         </div>
                                     </div>
-                                    <button type="button" class="btn-small btn-secondary" onclick="addComparisonBrand()">+ 添加品牌</button>
-                                    <p style="font-size: 0.85em; color: #666; margin-top: 8px;">至少添加1个对比品牌，最多4个</p>
+                                    <button type="button" class="btn-small btn-secondary" onclick="openRankingBrandSelector()">+ 添加竞品品牌</button>
+                                    <p style="font-size: 0.85em; color: #666; margin-top: 8px;">从竞品资料库中选择，可选 2-5 个品牌</p>
                                 </div>
                                 <div style="margin-bottom:16px;">
                                     <button class="report-btn" onclick="generateGEOContent()">✨ 生成内容</button>
@@ -297,8 +296,35 @@
                                 <div style="margin-top: 12px;">
                                     <button class="btn-small btn-primary" onclick="scoreGeoContent()">📊 GEO质量评分</button>
                                     <button class="btn-small btn-secondary" onclick="checkGeoContent()">🔍 检查GEO规范</button>
+                                    <button class="btn-small btn-warning" onclick="checkCompliance()">🛡️ 合规检测</button>
+                                    <button class="btn-small btn-success" onclick="autoSanitizeContent()">🔧 一键合规修正</button>
                                     <div id="geoScoreResult" style="margin-top: 10px;"></div>
                                     <div id="geoCheckResult" style="margin-top: 10px;"></div>
+                                    <div id="complianceResult" style="margin-top: 10px;"></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 排行竞品品牌选择器弹窗 -->
+                        <div id="rankingBrandSelectorModal" class="modal" style="display: none;">
+                            <div class="modal-content" style="max-width: 500px;">
+                                <div class="modal-header">
+                                    <h3>🏁 选择参与排行的竞品品牌</h3>
+                                    <button class="modal-close" onclick="closeRankingBrandSelector()">&times;</button>
+                                </div>
+                                <div class="modal-body">
+                                    <div id="rankingBrandSelectorList" style="max-height: 400px; overflow-y: auto;">
+                                        <div style="text-align: center; padding: 20px; color: #9ca3af;">
+                                            加载中...
+                                        </div>
+                                    </div>
+                                    <p style="font-size: 0.85em; color: #666; margin-top: 12px;">
+                                        💡 从竞品资料库中选择，可选 2-5 个品牌。主品牌会自动排在第一位。
+                                    </p>
+                                </div>
+                                <div class="modal-footer">
+                                    <button class="btn-cancel" onclick="closeRankingBrandSelector()">取消</button>
+                                    <button class="btn-save" onclick="confirmRankingBrands()">确认选择</button>
                                 </div>
                             </div>
                         </div>
@@ -349,7 +375,7 @@
                                 </div>
 
                                 <div style="display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; align-items: center;">
-                                    <button class="btn-small btn-secondary" onclick="loadDoubaoCitations()">🔄 刷新引用链接</button>
+                                    <button class="btn-small btn-secondary" onclick="loadDoubaoCitations()">🔄 刷新</button>
                                     <div style="display: flex; align-items: center; gap: 8px;">
                                         <span style="font-size: 0.9em; color: #666;">筛选:</span>
                                         <select id="citationImportFilter" class="form-input" style="width: auto; padding: 6px 10px;" onchange="loadDoubaoCitations()">
@@ -358,6 +384,9 @@
                                             <option value="imported">已导入</option>
                                         </select>
                                     </div>
+                                    <div style="flex: 1;"></div>
+                                    <span id="citationStats" style="font-size: 0.85em; color: #6b7280;"></span>
+                                    <button class="btn-small btn-danger" onclick="cleanupCitations()" style="margin-left: auto;">🗑️ 清理旧数据</button>
                                 </div>
                                 <div id="doubaoCitationList" style="margin-bottom: 12px;"></div>
                                 <div id="doubaoCitationPagination" style="display: flex; justify-content: center; align-items: center; gap: 8px; margin-top: 12px;"></div>
@@ -593,8 +622,23 @@
                     <small style="color: #666;">支持: TXT, MD, DOCX, PDF, PPTX</small>
                 </div>
                 <div class="form-group">
+                    <label>文档分类:</label>
+                    <select id="newDocCategory" class="form-input" onchange="onDocCategoryChange()">
+                        <option value="brand">📦 品牌素材（自己的品牌资料，生成时作为事实依据）</option>
+                        <option value="competitor">⚔️ 竞品资料（竞品品牌的信息，用于对比分析）</option>
+                        <option value="reference">📖 参考文章（优质行业文章，生成时参考写作风格）</option>
+                    </select>
+                </div>
+                <div class="form-group" id="competitorBrandSelectGroup" style="display: none;">
+                    <label>所属竞品品牌:</label>
+                    <select id="newDocCompetitorBrand" class="form-input">
+                        <option value="">请选择竞品品牌</option>
+                    </select>
+                    <small style="color: #666;">没有的话先去竞品资料页面添加</small>
+                </div>
+                <div class="form-group">
                     <label>标签(可选，多个用逗号分隔):</label>
-                    <input type="text" id="newDocTags" class="form-input" placeholder="例如: 品牌,案例,技术">
+                    <input type="text" id="newDocTags" class="form-input" placeholder="例如: 案例,技术,产品">
                 </div>
             </div>
             <div class="modal-footer">
@@ -604,7 +648,132 @@
         </div>
     </div>
 
-    <!-- 创建摘要弹窗 -->
+    <!-- 手动创建文档弹窗 -->
+    <div id="manualDocModal" class="modal" style="display: none;">
+        <div class="modal-content" style="max-width: 700px;">
+            <div class="modal-header">
+                <h3>📝 新建文档</h3>
+                <button class="modal-close" onclick="closeManualDocModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>文档标题 *</label>
+                    <input type="text" id="manualDocTitle" class="form-input" placeholder="输入文档标题">
+                </div>
+                <div class="form-group">
+                    <label>文档分类 *</label>
+                    <select id="manualDocCategory" class="form-input" onchange="onManualDocCategoryChange()">
+                        <option value="brand">📦 品牌素材（自己的品牌资料，生成时作为事实依据）</option>
+                        <option value="competitor">⚔️ 竞品资料（竞品品牌的信息，用于对比分析）</option>
+                        <option value="reference">📖 参考文章（优质行业文章，生成时参考写作风格）</option>
+                    </select>
+                </div>
+                <div class="form-group" id="manualCompetitorBrandGroup" style="display: none;">
+                    <label>所属竞品品牌 *</label>
+                    <select id="manualDocCompetitorBrand" class="form-input">
+                        <option value="">请选择竞品品牌</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>标签（可选，多个用逗号分隔）</label>
+                    <input type="text" id="manualDocTags" class="form-input" placeholder="例如: 案例,技术,产品">
+                </div>
+                <div class="form-group">
+                    <label>文档内容 *</label>
+                    <textarea id="manualDocContent" class="form-input" rows="14" placeholder="在此输入文档正文内容..."></textarea>
+                    <div style="text-align: right; font-size: 0.85em; color: #9ca3af; margin-top: 4px;">
+                        <span id="manualDocWordCount">0</span> 字
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-cancel" onclick="closeManualDocModal()">取消</button>
+                <button class="btn-save" onclick="saveManualDocument()">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 文档详情/编辑弹窗 -->
+    <div id="docDetailModal" class="modal" style="display: none;">
+        <div class="modal-content" style="max-width: 760px; max-height: 85vh;">
+            <div class="modal-header">
+                <h3>✏️ 编辑文档</h3>
+                <button class="modal-close" onclick="closeDocDetail()">&times;</button>
+            </div>
+            <div class="modal-body" style="overflow-y: auto; max-height: calc(85vh - 120px);">
+                <div class="form-group">
+                    <label>文档标题</label>
+                    <input type="text" id="editDocTitle" class="form-input">
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                    <div class="form-group">
+                        <label>文档分类</label>
+                        <select id="editDocCategory" class="form-input" onchange="onEditDocCategoryChange()">
+                            <option value="brand">📦 品牌素材</option>
+                            <option value="competitor">⚔️ 竞品资料</option>
+                            <option value="reference">📖 参考文章</option>
+                        </select>
+                    </div>
+                    <div class="form-group" id="editCompetitorBrandGroup" style="display: none;">
+                        <label>所属竞品品牌</label>
+                        <select id="editDocCompetitorBrand" class="form-input">
+                            <option value="">请选择竞品品牌</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>标签（多个用逗号分隔）</label>
+                    <input type="text" id="editDocTags" class="form-input" placeholder="例如: 案例,技术,产品">
+                </div>
+                <div class="form-group">
+                    <label>文档内容</label>
+                    <textarea id="editDocContent" class="form-input" rows="16" placeholder="文档正文内容..."></textarea>
+                    <div style="display: flex; justify-content: space-between; font-size: 0.85em; color: #9ca3af; margin-top: 4px;">
+                        <span id="editDocFileType" style="font-size: 0.9em;"></span>
+                        <span><span id="editDocWordCount">0</span> 字</span>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-cancel" onclick="closeDocDetail()">取消</button>
+                <button class="btn-save" onclick="saveDocEdit()">保存修改</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 添加竞品品牌弹窗 -->
+    <div id="addCompetitorBrandModal" class="modal" style="display: none;">
+        <div class="modal-content" style="max-width: 480px;">
+            <div class="modal-header">
+                <h3>⚔️ 添加竞品品牌</h3>
+                <button class="modal-close" onclick="closeAddCompetitorBrandModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>品牌名称 *</label>
+                    <input type="text" id="newCompetitorBrandName" class="form-input" placeholder="例如：星颜体康">
+                </div>
+                <div class="form-group">
+                    <label>别名/简称（可选）</label>
+                    <input type="text" id="newCompetitorBrandAlias" class="form-input" placeholder="多个用逗号分隔">
+                </div>
+                <div class="form-group">
+                    <label>行业（可选）</label>
+                    <input type="text" id="newCompetitorBrandIndustry" class="form-input" placeholder="例如：形体管理">
+                </div>
+                <div class="form-group">
+                    <label>备注（可选）</label>
+                    <textarea id="newCompetitorBrandNotes" class="form-input" rows="2" placeholder="品牌特点、优劣势等"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-cancel" onclick="closeAddCompetitorBrandModal()">取消</button>
+                <button class="btn-save" onclick="addCompetitorBrand()">添加</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 摘要管理已隐藏（备用）
     <div id="createSummaryModal" class="modal" style="display: none;">
         <div class="modal-content">
             <div class="modal-header">
@@ -642,6 +811,7 @@
             </div>
         </div>
     </div>
+    -->
 
     <!-- 查看文档弹窗 -->
     <div id="viewDocumentModal" class="modal" style="display: none;">
@@ -691,6 +861,6 @@
     <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
     <!-- Marked.js for Markdown rendering -->
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-    <script src="/static/js/main.js?v=20"></script>
+    <script src="/static/js/main.js?v=28"></script>
 </body>
 </html>

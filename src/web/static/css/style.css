@@ -1,4 +1,4 @@
-/* GEO 品牌监测 - 优化版样式表 */
+/* GEO 品牌监测 - 简洁专业版样式 */
 
 * {
     margin: 0;
@@ -7,28 +7,33 @@
 }
 
 body {
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: #f5f6f8;
+    color: #1f2937;
     min-height: 100vh;
-    padding: 12px;
+    padding: 16px;
+    font-size: 14px;
+    line-height: 1.5;
 }
 
 .container {
     max-width: 1920px;
     margin: 0 auto;
-    width: 98%;
+    width: 100%;
 }
+
+/* ========== Header ========== */
 
 header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    color: white;
-    margin-bottom: 15px;
+    margin-bottom: 16px;
+    padding: 0 4px;
 }
 
 .header-left {
-    text-align: left;
+    flex: 1;
 }
 
 .header-right {
@@ -36,50 +41,56 @@ header {
 }
 
 header h1 {
-    font-size: 1.8em;
-    margin-bottom: 4px;
-    text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
+    font-size: 20px;
+    font-weight: 600;
+    color: #111827;
+    margin-bottom: 2px;
+    letter-spacing: -0.01em;
 }
 
 .subtitle {
-    font-size: 0.9em;
-    opacity: 0.9;
+    font-size: 13px;
+    color: #6b7280;
 }
 
 .settings-btn {
-    background: rgba(255, 255, 255, 0.2);
-    border: 2px solid rgba(255, 255, 255, 0.3);
-    color: white;
-    font-size: 1.5em;
-    padding: 10px 16px;
-    border-radius: 10px;
+    background: #fff;
+    border: 1px solid #d1d5db;
+    color: #374151;
+    font-size: 18px;
+    padding: 8px 14px;
+    border-radius: 6px;
     cursor: pointer;
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    backdrop-filter: blur(10px);
+    transition: all 0.15s ease;
 }
 
 .settings-btn:hover {
-    background: rgba(255, 255, 255, 0.3);
-    border-color: rgba(255, 255, 255, 0.5);
-    transform: scale(1.05) rotate(10deg);
-    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+    background: #f9fafb;
+    border-color: #9ca3af;
+    color: #111827;
 }
 
-/* 主内容布局 */
+.settings-btn:active {
+    background: #f3f4f6;
+}
+
+/* ========== 主内容布局 ========== */
+
 .main-content {
     display: flex;
-    gap: 12px;
-    min-height: calc(100vh - 120px);
+    gap: 16px;
+    min-height: calc(100vh - 100px);
 }
 
-/* 左侧边栏 - 项目列表 */
+/* ========== 左侧边栏 - 项目列表 ========== */
+
 .sidebar {
-    width: 220px;
+    width: 240px;
     flex-shrink: 0;
-    background: rgba(255, 255, 255, 0.95);
-    border-radius: 10px;
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
     padding: 12px;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
 }
 
 .sidebar-header {
@@ -88,12 +99,15 @@ header h1 {
     align-items: center;
     margin-bottom: 10px;
     padding-bottom: 8px;
-    border-bottom: 1px solid #eee;
+    border-bottom: 1px solid #f3f4f6;
 }
 
 .sidebar-header h3 {
-    font-size: 0.95em;
-    color: #333;
+    font-size: 13px;
+    font-weight: 600;
+    color: #374151;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
 }
 
 .project-list {
@@ -103,84 +117,137 @@ header h1 {
 
 .project-item {
     padding: 10px 12px;
-    background: white;
-    border-radius: 8px;
-    margin-bottom: 8px;
+    background: #fafafa;
+    border-radius: 6px;
+    margin-bottom: 6px;
     cursor: pointer;
-    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-    border: 2px solid #e5e7eb;
+    transition: all 0.15s ease;
+    border: 1px solid transparent;
     position: relative;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.06);
 }
 
 .project-item::after {
-    content: '→';
+    content: '';
     position: absolute;
-    right: 10px;
+    right: 12px;
     top: 50%;
     transform: translateY(-50%);
-    color: #d1d5db;
-    font-size: 0.9em;
-    transition: all 0.2s;
+    width: 6px;
+    height: 6px;
+    border-right: 1.5px solid #9ca3af;
+    border-bottom: 1.5px solid #9ca3af;
+    transform: translateY(-70%) rotate(-45deg);
+    transition: all 0.15s;
+    opacity: 0;
 }
 
 .project-item:hover {
-    background: #f0f4ff;
-    border-color: #667eea;
-    transform: translateX(3px);
-    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2);
+    background: #f3f4f6;
+    border-color: #e5e7eb;
 }
 
 .project-item:hover::after {
-    color: #667eea;
-    right: 8px;
+    opacity: 1;
+    right: 10px;
 }
 
 .project-item.active {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    color: white;
-    border-color: #667eea;
-    transform: translateX(3px);
-    box-shadow: 0 4px 16px rgba(102, 126, 234, 0.4);
+    background: #eff6ff;
+    border-color: #bfdbfe;
+    color: #1e40af;
 }
 
 .project-item.active::after {
-    content: '✓';
-    color: white;
+    content: '';
+    opacity: 1;
+    border-color: #2563eb;
     right: 12px;
-    font-size: 1em;
 }
 
 .project-item-name {
-    font-weight: 600;
-    font-size: 0.95em;
+    font-weight: 500;
+    font-size: 14px;
     margin-bottom: 2px;
+    color: #111827;
+}
+
+.project-item.active .project-item-name {
+    color: #1e40af;
+    font-weight: 600;
 }
 
 .project-item-desc {
-    font-size: 0.8em;
-    opacity: 0.8;
+    font-size: 12px;
+    color: #6b7280;
 }
+
+.project-item.active .project-item-desc {
+    color: #3b82f6;
+}
+
+/* ========== 按钮基础样式 ========== */
 
 .btn-small {
     padding: 5px 10px;
     border-radius: 5px;
-    font-size: 0.8em;
+    font-size: 12px;
     cursor: pointer;
-    border: none;
-    transition: all 0.2s;
+    border: 1px solid transparent;
+    transition: all 0.15s;
+    font-weight: 500;
 }
 
 .btn-primary {
-    background: #667eea;
+    background: #2563eb;
     color: white;
+    border-color: #2563eb;
 }
 
 .btn-primary:hover {
-    background: #5568d3;
+    background: #1d4ed8;
+    border-color: #1d4ed8;
 }
 
-/* 右侧内容区域 */
+.btn-secondary {
+    background: #fff;
+    color: #374151;
+    border-color: #d1d5db;
+}
+
+.btn-secondary:hover {
+    background: #f9fafb;
+    border-color: #9ca3af;
+}
+
+.btn-success {
+    background: #059669;
+    color: white;
+    border-color: #059669;
+}
+
+.btn-success:hover {
+    background: #047857;
+    border-color: #047857;
+}
+
+.btn-danger {
+    background: #dc2626;
+    color: white;
+    border-color: #dc2626;
+}
+
+.btn-danger:hover {
+    background: #b91c1c;
+    border-color: #b91c1c;
+}
+
+.btn-danger:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* ========== 右侧内容区域 ========== */
+
 .content-area {
     flex: 1;
     min-width: 0;
@@ -188,120 +255,105 @@ header h1 {
 
 /* 无项目提示 */
 .empty-project-state {
-    background: rgba(255,255,255,0.95);
-    border-radius: 10px;
-    padding: 40px 15px;
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    padding: 60px 20px;
     text-align: center;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
 }
 
 .empty-project-icon {
-    font-size: 3em;
-    margin-bottom: 10px;
+    font-size: 36px;
+    margin-bottom: 12px;
+    opacity: 0.6;
 }
 
 .empty-project-state h3 {
-    color: #333;
-    margin-bottom: 5px;
-    font-size: 1.1em;
+    color: #374151;
+    margin-bottom: 4px;
+    font-size: 16px;
+    font-weight: 600;
 }
 
 .empty-project-state p {
-    color: #666;
-    font-size: 0.9em;
+    color: #6b7280;
+    font-size: 13px;
 }
 
 /* 项目头部 */
 .project-header {
-    background: rgba(255,255,255,0.95);
-    border-radius: 10px;
-    padding: 12px 16px;
-    margin-bottom: 10px;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    padding: 14px 18px;
+    margin-bottom: 12px;
 }
 
 .project-header h2 {
-    color: #333;
-    font-size: 1.25em;
-    margin-bottom: 3px;
+    color: #111827;
+    font-size: 18px;
+    font-weight: 600;
+    margin-bottom: 2px;
 }
 
 .project-desc {
-    color: #666;
-    font-size: 0.85em;
+    color: #6b7280;
+    font-size: 13px;
 }
 
-/* 导航 */
+/* ========== 导航 ========== */
+
 .main-nav {
     display: flex;
-    gap: 8px;
-    margin-bottom: 10px;
-    background: rgba(255,255,255,0.15);
-    padding: 6px;
-    border-radius: 10px;
-    backdrop-filter: blur(10px);
+    gap: 4px;
+    margin-bottom: 12px;
+    background: #fff;
+    padding: 4px;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
 }
 
 .nav-btn {
     flex: 1;
     padding: 10px 14px;
-    border: 2px solid transparent;
-    border-radius: 8px;
-    background: rgba(255,255,255,0.9);
-    color: #555;
+    border: none;
+    border-radius: 6px;
+    background: transparent;
+    color: #6b7280;
     cursor: pointer;
-    font-size: 0.9em;
-    font-weight: 600;
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    box-shadow: 0 2px 6px rgba(0,0,0,0.06);
+    font-size: 13px;
+    font-weight: 500;
+    transition: all 0.15s ease;
     position: relative;
-    overflow: hidden;
-}
-
-.nav-btn::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: -100%;
-    width: 100%;
-    height: 100%;
-    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent);
-    transition: left 0.5s;
-}
-
-.nav-btn:hover::before {
-    left: 100%;
 }
 
 .nav-btn:hover {
-    background: white;
-    color: #667eea;
-    transform: translateY(-1px);
-    box-shadow: 0 4px 14px rgba(0,0,0,0.12);
-    border-color: rgba(102,126,234,0.3);
+    background: #f3f4f6;
+    color: #374151;
 }
 
 .nav-btn.active {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: #2563eb;
     color: white;
-    box-shadow: 0 6px 20px rgba(102, 126, 234, 0.35);
-    transform: translateY(-2px);
-    border-color: transparent;
+    font-weight: 500;
 }
 
-.nav-btn.active::after {
-    content: '';
-    position: absolute;
-    bottom: 2px;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 24px;
-    height: 2px;
-    background: white;
-    border-radius: 1px;
+/* GEO 按钮特殊样式 */
+.nav-btn.geo-btn {
+    color: #6b7280;
 }
 
-/* 视图 */
+.nav-btn.geo-btn:hover {
+    color: #374151;
+}
+
+.nav-btn.geo-btn.active {
+    background: #2563eb;
+    color: white;
+}
+
+/* ========== 视图 ========== */
+
 .view {
     display: none;
 }
@@ -310,53 +362,87 @@ header h1 {
     display: block;
 }
 
-/* 统计卡片 */
+/* ========== 统计卡片 ========== */
+
 .stats-grid {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
-    gap: 15px;
+    gap: 12px;
     margin-bottom: 12px;
 }
 
 .stat-card {
-    background: white;
-    border-radius: 10px;
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
     padding: 16px;
-    text-align: center;
-    box-shadow: 0 3px 8px rgba(0,0,0,0.08);
-    transition: transform 0.2s;
+    text-align: left;
+    transition: all 0.15s;
 }
 
 .stat-card:hover {
-    transform: translateY(-2px);
+    border-color: #d1d5db;
 }
 
 .stat-value {
-    font-size: 2em;
-    font-weight: bold;
-    color: #667eea;
+    font-size: 24px;
+    font-weight: 600;
+    color: #111827;
     margin-bottom: 4px;
+    letter-spacing: -0.02em;
 }
 
 .stat-label {
-    color: #666;
-    font-size: 0.85em;
+    color: #6b7280;
+    font-size: 13px;
 }
 
-/* 内容区块 */
+/* ========== 内容区块 ========== */
+
 .chart-section, .data-section, .detail-section {
-    background: white;
-    border-radius: 10px;
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
     padding: 16px;
     margin-bottom: 12px;
-    box-shadow: 0 3px 8px rgba(0,0,0,0.08);
+}
+
+.chart-section h2, .data-section h2, .detail-section h2,
+.chart-section h3, .data-section h3, .detail-section h3,
+.chart-section h4, .data-section h4, .detail-section h4 {
+    color: #111827;
+    margin-bottom: 12px;
+    font-size: 15px;
+    font-weight: 600;
+}
+
+.chart-section h4, .data-section h4, .detail-section h4 {
+    font-size: 14px;
+}
+
+.project-brand-info {
+    margin-bottom: 12px;
+    padding: 10px 12px;
+    background: #f9fafb;
+    border: 1px solid #f3f4f6;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    color: #374151;
+}
+
+.project-brand-info strong {
+    color: #2563eb;
+    font-weight: 600;
 }
 
 /* 图表并排布局 */
 .charts-row {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 15px;
+    gap: 12px;
     margin-bottom: 12px;
 }
 
@@ -373,7 +459,7 @@ header h1 {
 .charts-row-bottom {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 15px;
+    gap: 12px;
     margin-bottom: 12px;
 }
 
@@ -399,118 +485,6 @@ header h1 {
     flex: 1;
     min-height: 0;
     overflow-y: auto;
-}
-
-/* 紧凑的日期列表 */
-.date-list.compact {
-    grid-template-columns: 1fr;
-    gap: 6px;
-}
-
-.date-item.compact {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 10px 12px;
-}
-
-.date-item.compact .date-text {
-    font-weight: 600;
-    color: #374151;
-    font-size: 0.9em;
-}
-
-.rate-badge {
-    display: inline-block;
-    padding: 4px 10px;
-    border-radius: 20px;
-    color: white;
-    font-size: 0.8em;
-    font-weight: bold;
-}
-
-/* 全宽图表 */
-.chart-section.full-width {
-    width: 100%;
-}
-
-/* 底部并排布局 */
-.charts-row-bottom {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 15px;
-    margin-bottom: 12px;
-}
-
-.charts-row-bottom .chart-section,
-.charts-row-bottom .data-section {
-    margin-bottom: 0;
-    height: 360px;
-    display: flex;
-    flex-direction: column;
-}
-
-.charts-row-bottom .chart-container {
-    flex: 1;
-    min-height: 0;
-}
-
-/* 紧凑的数据区块 */
-.data-section.compact {
-    overflow-y: auto;
-}
-
-.data-section.compact .date-list {
-    flex: 1;
-    min-height: 0;
-    overflow-y: auto;
-}
-
-/* 紧凑的日期列表 */
-.date-list.compact {
-    grid-template-columns: 1fr;
-    gap: 6px;
-}
-
-.date-item.compact {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 10px 12px;
-}
-
-.date-item.compact .date-text {
-    font-weight: 600;
-    color: #374151;
-    font-size: 0.9em;
-}
-
-.rate-badge {
-    display: inline-block;
-    padding: 4px 10px;
-    border-radius: 20px;
-    color: white;
-    font-size: 0.8em;
-    font-weight: bold;
-}
-
-.chart-section h2, .data-section h2, .detail-section h2,
-.chart-section h3, .data-section h3, .detail-section h3,
-.chart-section h4, .data-section h4, .detail-section h4 {
-    color: #333;
-    margin-bottom: 10px;
-    font-size: 1.05em;
-}
-
-.project-brand-info {
-    margin-bottom: 10px;
-    padding: 8px 12px;
-    background: #f8f9fa;
-    border-radius: 6px;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    font-size: 0.9em;
 }
 
 /* 图表 */
@@ -519,7 +493,8 @@ header h1 {
     height: 350px;
 }
 
-/* 日期列表 */
+/* ========== 日期列表 ========== */
+
 .date-list {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
@@ -527,35 +502,64 @@ header h1 {
 }
 
 .date-item {
-    background: #f8f9fa;
-    border: 1px solid #e9ecef;
+    background: #fafafa;
+    border: 1px solid #e5e7eb;
     border-radius: 6px;
     padding: 12px;
     cursor: pointer;
-    transition: all 0.2s;
+    transition: all 0.15s;
 }
 
 .date-item:hover {
-    background: #e9ecef;
-    border-color: #667eea;
-    transform: translateY(-1px);
+    background: #f3f4f6;
+    border-color: #d1d5db;
 }
 
 .date-item-title {
-    font-weight: bold;
-    color: #333;
+    font-weight: 500;
+    color: #111827;
     margin-bottom: 4px;
-    font-size: 0.95em;
+    font-size: 14px;
 }
 
 .date-item-meta {
-    font-size: 0.8em;
-    color: #666;
+    font-size: 12px;
+    color: #6b7280;
 }
 
-/* 详情 */
+/* 紧凑的日期列表 */
+.date-list.compact {
+    grid-template-columns: 1fr;
+    gap: 6px;
+}
+
+.date-item.compact {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 12px;
+}
+
+.date-item.compact .date-text {
+    font-weight: 500;
+    color: #374151;
+    font-size: 13px;
+}
+
+.rate-badge {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 12px;
+    color: white;
+    font-size: 12px;
+    font-weight: 500;
+}
+
+/* ========== 详情 ========== */
+
 .detail-item {
-    background: #f8f9fa;
+    background: #fafafa;
+    border: 1px solid #f0f0f0;
     border-radius: 6px;
     padding: 12px;
     margin-bottom: 8px;
@@ -567,18 +571,18 @@ header h1 {
     align-items: center;
     margin-bottom: 8px;
     padding-bottom: 8px;
-    border-bottom: 1px solid #e9ecef;
+    border-bottom: 1px solid #e5e7eb;
 }
 
 .detail-hour {
-    font-weight: bold;
-    color: #667eea;
-    font-size: 0.95em;
+    font-weight: 600;
+    color: #2563eb;
+    font-size: 14px;
 }
 
 .detail-time {
-    color: #666;
-    font-size: 0.85em;
+    color: #6b7280;
+    font-size: 12px;
 }
 
 .detail-question-list {
@@ -586,45 +590,48 @@ header h1 {
 }
 
 .detail-question {
-    padding: 8px;
-    background: white;
+    padding: 10px;
+    background: #fff;
     border-radius: 5px;
     margin-bottom: 6px;
-    border-left: 3px solid #667eea;
+    border-left: 3px solid #2563eb;
 }
 
 .detail-question-title {
     font-weight: 500;
     margin-bottom: 4px;
-    color: #333;
-    font-size: 0.9em;
+    color: #111827;
+    font-size: 13px;
 }
 
 .detail-question-response {
-    font-size: 0.85em;
-    color: #666;
+    font-size: 12px;
+    color: #6b7280;
     max-height: 80px;
     overflow-y: auto;
     line-height: 1.5;
 }
 
 .back-btn {
-    background: #667eea;
-    color: white;
-    border: none;
-    padding: 8px 16px;
+    background: #fff;
+    color: #374151;
+    border: 1px solid #d1d5db;
+    padding: 7px 14px;
     border-radius: 5px;
     cursor: pointer;
-    margin-bottom: 10px;
-    font-size: 0.9em;
-    transition: background 0.2s;
+    margin-bottom: 12px;
+    font-size: 13px;
+    transition: all 0.15s;
+    font-weight: 500;
 }
 
 .back-btn:hover {
-    background: #5568d3;
+    background: #f9fafb;
+    border-color: #9ca3af;
 }
 
-/* 任务列表 */
+/* ========== 任务列表 ========== */
+
 .task-list {
     display: flex;
     flex-direction: column;
@@ -632,30 +639,29 @@ header h1 {
 }
 
 .task-item {
-    background: #f8f9fa;
-    border: 1px solid #e9ecef;
+    background: #fafafa;
+    border: 1px solid #e5e7eb;
     border-radius: 6px;
     padding: 12px;
-    transition: all 0.2s;
+    transition: all 0.15s;
 }
 
 .task-item:hover {
-    background: #e9ecef;
-    border-color: #667eea;
+    background: #f3f4f6;
+    border-color: #d1d5db;
     cursor: pointer;
-    transform: translateX(2px);
 }
 
 .task-item-title {
-    font-weight: bold;
-    color: #333;
+    font-weight: 600;
+    color: #111827;
     margin-bottom: 4px;
-    font-size: 0.95em;
+    font-size: 14px;
 }
 
 .task-item-question {
-    color: #666;
-    font-size: 0.85em;
+    color: #6b7280;
+    font-size: 13px;
     margin-bottom: 2px;
 }
 
@@ -670,8 +676,9 @@ header h1 {
     border: none;
     border-radius: 5px;
     cursor: pointer;
-    font-size: 0.85em;
-    transition: all 0.2s;
+    font-size: 12px;
+    transition: all 0.15s;
+    font-weight: 500;
 }
 
 .btn-edit {
@@ -683,6 +690,15 @@ header h1 {
     background: #d97706;
 }
 
+.btn-view {
+    background: #3b82f6;
+    color: white;
+}
+
+.btn-view:hover {
+    background: #2563eb;
+}
+
 .btn-delete {
     background: #ef4444;
     color: white;
@@ -692,34 +708,39 @@ header h1 {
     background: #dc2626;
 }
 
-/* 报告区块 */
+/* ========== 报告区块 ========== */
+
 .report-section {
-    background: #fff8f0;
+    background: #fefce8;
+    border: 1px solid #fef08a;
     border-radius: 6px;
     padding: 14px;
     margin-bottom: 12px;
 }
 
 .report-section h4 {
-    color: #d97706;
+    color: #a16207;
     margin-top: 0;
     margin-bottom: 8px;
-    font-size: 1em;
+    font-size: 14px;
+    font-weight: 600;
 }
 
-/* 回答列表 */
+/* ========== 回答列表 ========== */
+
 .answers-section h4 {
-    color: #333;
+    color: #111827;
     margin-bottom: 8px;
-    font-size: 1em;
+    font-size: 14px;
+    font-weight: 600;
 }
 
 .answer-item {
-    background: #f8f9fa;
+    background: #fafafa;
     border-radius: 6px;
     padding: 12px;
     margin-bottom: 8px;
-    border-left: 4px solid #667eea;
+    border-left: 3px solid #2563eb;
 }
 
 .answer-header {
@@ -730,29 +751,30 @@ header h1 {
 }
 
 .answer-time {
-    font-weight: bold;
-    color: #667eea;
-    font-size: 0.9em;
+    font-weight: 500;
+    color: #374151;
+    font-size: 13px;
 }
 
 .expand-btn {
-    background: #667eea;
+    background: #2563eb;
     color: white;
     border: none;
     padding: 5px 10px;
     border-radius: 5px;
     cursor: pointer;
-    font-size: 0.85em;
-    transition: background 0.2s;
+    font-size: 12px;
+    transition: background 0.15s;
+    font-weight: 500;
 }
 
 .expand-btn:hover {
-    background: #5568d3;
+    background: #1d4ed8;
 }
 
 .answer-preview {
-    color: #666;
-    font-size: 0.9em;
+    color: #6b7280;
+    font-size: 13px;
     line-height: 1.5;
 }
 
@@ -760,7 +782,7 @@ header h1 {
     display: none;
     margin-top: 12px;
     padding-top: 12px;
-    border-top: 1px solid #e9ecef;
+    border-top: 1px solid #e5e7eb;
 }
 
 .answer-full.expanded {
@@ -768,10 +790,27 @@ header h1 {
 }
 
 .answer-full .markdown-body {
-    font-size: 0.9em;
+    font-size: 13px;
 }
 
-/* 表单 */
+.report-btn {
+    background: #059669;
+    color: white;
+    border: none;
+    padding: 7px 14px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 13px;
+    transition: background 0.15s;
+    font-weight: 500;
+}
+
+.report-btn:hover {
+    background: #047857;
+}
+
+/* ========== 表单 ========== */
+
 .form-group {
     margin-bottom: 12px;
 }
@@ -779,43 +818,42 @@ header h1 {
 .form-group label {
     display: block;
     margin-bottom: 4px;
-    color: #333;
+    color: #374151;
     font-weight: 500;
-    font-size: 0.9em;
+    font-size: 13px;
 }
 
 .form-input {
     width: 100%;
-    padding: 8px 10px;
-    border: 1px solid #ddd;
+    padding: 7px 10px;
+    border: 1px solid #d1d5db;
     border-radius: 5px;
-    font-size: 0.9em;
+    font-size: 13px;
     box-sizing: border-box;
-    transition: border-color 0.2s;
+    transition: border-color 0.15s, box-shadow 0.15s;
+    background: #fff;
+    color: #111827;
 }
 
 .form-input:focus {
     outline: none;
-    border-color: #667eea;
+    border-color: #2563eb;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
 }
 
-/* 报告按钮 */
-.report-btn {
-    background: #10b981;
-    color: white;
-    border: none;
-    padding: 8px 14px;
-    border-radius: 5px;
-    cursor: pointer;
-    font-size: 0.9em;
-    transition: background 0.2s;
+textarea.form-input {
+    resize: vertical;
+    min-height: 80px;
+    font-family: inherit;
+    line-height: 1.6;
 }
 
-.report-btn:hover {
-    background: #059669;
+.form-input::placeholder {
+    color: #9ca3af;
 }
 
-/* 弹窗 */
+/* ========== 弹窗 ========== */
+
 .modal {
     display: none;
     position: fixed;
@@ -824,20 +862,21 @@ header h1 {
     top: 0;
     width: 100%;
     height: 100%;
-    background-color: rgba(0, 0, 0, 0.5);
+    background-color: rgba(0, 0, 0, 0.4);
     justify-content: center;
     align-items: center;
 }
 
 .modal-content {
     background: white;
-    border-radius: 10px;
+    border-radius: 8px;
     width: 90%;
     max-width: 480px;
     max-height: 85vh;
     display: flex;
     flex-direction: column;
-    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+    border: 1px solid #e5e7eb;
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
 }
 
 .modal-header {
@@ -845,28 +884,30 @@ header h1 {
     justify-content: space-between;
     align-items: center;
     padding: 14px 18px;
-    border-bottom: 1px solid #e9ecef;
+    border-bottom: 1px solid #f3f4f6;
 }
 
 .modal-header h3 {
     margin: 0;
-    color: #333;
-    font-size: 1.1em;
+    color: #111827;
+    font-size: 16px;
+    font-weight: 600;
 }
 
 .modal-close {
     background: none;
     border: none;
-    font-size: 1.8em;
+    font-size: 22px;
     cursor: pointer;
-    color: #999;
+    color: #9ca3af;
     line-height: 1;
     padding: 0;
     margin: 0;
+    font-weight: 300;
 }
 
 .modal-close:hover {
-    color: #333;
+    color: #374151;
 }
 
 .modal-body {
@@ -880,62 +921,68 @@ header h1 {
     justify-content: flex-end;
     gap: 8px;
     padding: 12px 18px;
-    border-top: 1px solid #e9ecef;
+    border-top: 1px solid #f3f4f6;
 }
 
 .modal-footer button {
-    padding: 8px 16px;
+    padding: 7px 16px;
     border: none;
     border-radius: 5px;
     cursor: pointer;
-    font-size: 0.9em;
-    transition: background 0.2s;
+    font-size: 13px;
+    transition: all 0.15s;
+    font-weight: 500;
 }
 
 .modal-footer .btn-cancel {
-    background: #9ca3af;
-    color: white;
+    background: #f3f4f6;
+    color: #374151;
+    border: 1px solid #d1d5db;
 }
 
 .modal-footer .btn-cancel:hover {
-    background: #6b7280;
+    background: #e5e7eb;
 }
 
 .modal-footer .btn-save {
-    background: #10b981;
+    background: #2563eb;
     color: white;
+    border: 1px solid #2563eb;
 }
 
 .modal-footer .btn-save:hover {
-    background: #059669;
+    background: #1d4ed8;
+    border-color: #1d4ed8;
 }
 
-/* 执行日志 */
+/* ========== 执行日志 ========== */
+
 .log-container {
-    background: #1a1a2e;
+    background: #111827;
     border-radius: 6px;
     padding: 12px;
     height: 280px;
     overflow-y: auto;
-    font-family: 'Consolas', 'Monaco', monospace;
-    font-size: 0.85em;
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+    font-size: 12px;
 }
 
 #logContent {
-    color: #eee;
+    color: #d1d5db;
     white-space: pre-wrap;
-    line-height: 1.5;
+    line-height: 1.6;
 }
 
 .log-line {
     margin-bottom: 1px;
 }
 
-/* 小时选择器 */
+/* ========== 小时选择器 ========== */
+
 .hour-selector {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(48px, 1fr));
-    gap: 8px;
+    gap: 6px;
 }
 
 .hour-checkbox {
@@ -943,58 +990,67 @@ header h1 {
     flex-direction: column;
     align-items: center;
     gap: 4px;
-    padding: 8px;
-    background: #f8f9fa;
-    border: 2px solid #e9ecef;
-    border-radius: 6px;
+    padding: 8px 4px;
+    background: #fafafa;
+    border: 1px solid #e5e7eb;
+    border-radius: 5px;
     cursor: pointer;
-    transition: all 0.2s;
+    transition: all 0.15s;
 }
 
 .hour-checkbox:hover {
-    background: #e9ecef;
+    background: #f3f4f6;
+    border-color: #d1d5db;
 }
 
 .hour-checkbox.selected {
-    background: #e0f2fe;
-    border-color: #0284c7;
+    background: #eff6ff;
+    border-color: #93c5fd;
 }
 
 .hour-checkbox input {
-    width: 18px;
-    height: 18px;
+    width: 14px;
+    height: 14px;
     cursor: pointer;
+    accent-color: #2563eb;
 }
 
 .hour-checkbox label {
-    font-weight: bold;
-    color: #333;
+    font-weight: 500;
+    color: #374151;
     cursor: pointer;
     user-select: none;
-    font-size: 0.85em;
+    font-size: 12px;
 }
 
-/* Markdown 样式 */
+.hour-checkbox.selected label {
+    color: #1d4ed8;
+}
+
+/* ========== Markdown 样式 ========== */
+
 .markdown-body h1 {
-    font-size: 1.3em;
+    font-size: 18px;
     margin-bottom: 0.4em;
     padding-bottom: 0.25em;
-    border-bottom: 1px solid #e9ecef;
-    color: #333;
+    border-bottom: 1px solid #e5e7eb;
+    color: #111827;
+    font-weight: 600;
 }
 
 .markdown-body h2 {
-    font-size: 1.1em;
+    font-size: 16px;
     margin-top: 1em;
     margin-bottom: 0.4em;
-    color: #555;
+    color: #374151;
+    font-weight: 600;
 }
 
 .markdown-body p {
     margin: 0.6em 0;
     line-height: 1.6;
-    color: #444;
-    font-size: 0.95em;
+    color: #374151;
+    font-size: 13px;
 }
 
 .markdown-body ul, .markdown-body ol {
@@ -1005,15 +1061,17 @@ header h1 {
 .markdown-body li {
     margin: 0.3em 0;
     line-height: 1.5;
-    font-size: 0.95em;
+    font-size: 13px;
+    color: #374151;
 }
 
 .markdown-body strong {
-    color: #333;
+    color: #111827;
+    font-weight: 600;
 }
 
 .markdown-body a {
-    color: #667eea;
+    color: #2563eb;
     text-decoration: none;
 }
 
@@ -1021,82 +1079,47 @@ header h1 {
     text-decoration: underline;
 }
 
-/* 空状态 */
+/* ========== 空状态 ========== */
+
 .empty-state {
     text-align: center;
     padding: 30px 15px;
-    color: #666;
+    color: #6b7280;
 }
 
 .empty-state-small {
     text-align: center;
     padding: 20px 10px;
-    color: #666;
+    color: #6b7280;
 }
 
 .empty-state-icon {
-    font-size: 2.5em;
+    font-size: 28px;
     margin-bottom: 10px;
-}
-
-/* ========== Header 布局 ========== */
-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    text-align: left;
-    padding: 0 10px;
-}
-
-.header-left {
-    flex: 1;
-}
-
-.header-right {
-    flex-shrink: 0;
-}
-
-/* ========== 设置按钮 ========== */
-.settings-btn {
-    background: rgba(255, 255, 255, 0.2);
-    border: 2px solid rgba(255, 255, 255, 0.3);
-    color: white;
-    font-size: 1.5em;
-    padding: 10px 16px;
-    border-radius: 10px;
-    cursor: pointer;
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    backdrop-filter: blur(10px);
-}
-
-.settings-btn:hover {
-    background: rgba(255, 255, 255, 0.3);
-    border-color: rgba(255, 255, 255, 0.5);
-    transform: scale(1.05) rotate(10deg);
-    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
-}
-
-.settings-btn:active {
-    transform: scale(0.95);
+    opacity: 0.5;
 }
 
 /* ========== 设置弹窗（大号） ========== */
+
 .modal-large {
     max-width: 650px;
 }
 
 /* ========== 队列状态区域 ========== */
+
 .queue-status-section {
-    background: linear-gradient(135deg, #667eea10 0%, #764ba210 100%);
-    border-radius: 8px;
-    padding: 14px;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    padding: 12px;
     margin-bottom: 16px;
 }
 
 .queue-status-section h4 {
     margin: 0 0 10px 0;
-    font-size: 0.95em;
-    color: #333;
+    font-size: 14px;
+    color: #1e293b;
+    font-weight: 600;
 }
 
 .queue-status {
@@ -1108,25 +1131,27 @@ header {
 }
 
 .queue-count {
-    font-size: 0.9em;
-    color: #555;
+    font-size: 13px;
+    color: #475569;
 }
 
 .queue-count strong {
-    color: #667eea;
-    font-size: 1.1em;
+    color: #2563eb;
+    font-size: 14px;
+    font-weight: 600;
 }
 
 .queue-current {
-    font-size: 0.9em;
-    color: #666;
+    font-size: 13px;
+    color: #64748b;
 }
 
 /* ========== 队列列表 ========== */
+
 .queue-list {
     margin-top: 12px;
     padding-top: 12px;
-    border-top: 1px dashed rgba(102, 126, 234, 0.3);
+    border-top: 1px dashed #cbd5e1;
 }
 
 .queue-item {
@@ -1134,10 +1159,11 @@ header {
     align-items: center;
     gap: 10px;
     padding: 8px 10px;
-    background: rgba(255, 255, 255, 0.7);
-    border-radius: 6px;
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 5px;
     margin-bottom: 6px;
-    font-size: 0.9em;
+    font-size: 13px;
 }
 
 .queue-item:last-child {
@@ -1148,67 +1174,73 @@ header {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 22px;
-    height: 22px;
-    background: #667eea;
+    width: 20px;
+    height: 20px;
+    background: #2563eb;
     color: white;
     border-radius: 50%;
-    font-size: 0.75em;
-    font-weight: bold;
+    font-size: 11px;
+    font-weight: 600;
+    flex-shrink: 0;
 }
 
 .queue-item-name {
     flex: 1;
-    color: #333;
+    color: #1e293b;
     font-weight: 500;
 }
 
 .queue-item-time {
-    color: #999;
-    font-size: 0.85em;
+    color: #94a3b8;
+    font-size: 12px;
 }
 
 /* ========== 设置分割线 ========== */
+
 .settings-divider {
     border: none;
-    border-top: 1px solid #e9ecef;
+    border-top: 1px solid #f1f5f9;
     margin: 18px 0;
 }
 
 /* ========== CAPTCHA 提示 ========== */
+
 .captcha-alert {
-    background: linear-gradient(135deg, #fff7ed, #ffedd5);
-    border: 2px solid #f97316;
-    border-radius: 10px;
-    padding: 16px;
+    background: #fff7ed;
+    border: 1px solid #fdba74;
+    border-radius: 6px;
+    padding: 14px;
     margin-bottom: 12px;
 }
 
 .captcha-alert-title {
-    font-weight: bold;
+    font-weight: 600;
     color: #c2410c;
     margin-bottom: 8px;
-    font-size: 1.05em;
+    font-size: 14px;
 }
 
 .captcha-alert-text {
     color: #9a3412;
     margin-bottom: 12px;
-    font-size: 0.95em;
+    font-size: 13px;
 }
 
 /* ========== 设置区域 ========== */
+
 .settings-section {
     margin-bottom: 8px;
 }
 
 .settings-section h4 {
     margin: 0 0 12px 0;
-    font-size: 0.95em;
-    color: #333;
+    font-size: 14px;
+    color: #1e293b;
+    font-weight: 600;
 }
 
 /* ========== 表单行布局 ========== */
+
 .form-row {
     display: flex;
     gap: 12px;
@@ -1228,6 +1260,7 @@ header {
 }
 
 /* ========== Profile 输入行 ========== */
+
 .profile-input-row {
     display: flex;
     gap: 8px;
@@ -1242,21 +1275,12 @@ header {
     white-space: nowrap;
 }
 
-/* ========== 次要按钮样式 ========== */
-.btn-secondary {
-    background: #6b7280;
-    color: white;
-}
-
-.btn-secondary:hover {
-    background: #4b5563;
-}
-
 /* ========== 即将执行的任务 - 分组样式 ========== */
+
 .scheduled-job-group {
-    background: linear-gradient(135deg, #f8f9ff 0%, #f0f4ff 100%);
-    border: 1px solid #e0e7ff;
-    border-radius: 8px;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
     padding: 12px;
     margin-bottom: 8px;
 }
@@ -1274,8 +1298,8 @@ header {
 
 .scheduled-job-project {
     font-weight: 600;
-    color: #4338ca;
-    font-size: 0.95em;
+    color: #1e40af;
+    font-size: 14px;
 }
 
 .scheduled-job-times {
@@ -1287,45 +1311,36 @@ header {
 }
 
 .time-label {
-    color: #666;
-    font-size: 0.85em;
+    color: #64748b;
+    font-size: 12px;
     font-weight: 500;
 }
 
 .time-tag {
     display: inline-block;
-    padding: 3px 8px;
-    background: #667eea;
+    padding: 2px 8px;
+    background: #2563eb;
     color: white;
-    border-radius: 12px;
-    font-size: 0.8em;
+    border-radius: 10px;
+    font-size: 12px;
     font-weight: 500;
     margin-right: 4px;
     margin-bottom: 4px;
 }
 
 .time-tag.range {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    padding: 3px 10px;
+    background: #1e40af;
+    padding: 2px 10px;
 }
 
 .scheduled-job-next {
-    color: #666;
-    font-size: 0.8em;
+    color: #64748b;
+    font-size: 12px;
     padding-top: 6px;
-    border-top: 1px dashed #d1d5db;
+    border-top: 1px dashed #cbd5e1;
 }
 
 /* ========== 项目管理模式样式 ========== */
-
-.btn-success {
-    background: #10b981;
-    color: white;
-}
-
-.btn-success:hover {
-    background: #059669;
-}
 
 .project-item.manage-mode {
     display: flex;
@@ -1341,28 +1356,29 @@ header {
 .project-info {
     flex: 1;
     cursor: pointer;
-    padding: 8px 0;
+    padding: 4px 0;
 }
 
 .btn-delete-project {
-    background: #ef4444;
-    color: white;
-    border: none;
-    border-radius: 6px;
-    width: 32px;
-    height: 32px;
-    font-size: 1em;
+    background: #fee2e2;
+    color: #dc2626;
+    border: 1px solid #fecaca;
+    border-radius: 5px;
+    width: 30px;
+    height: 30px;
+    font-size: 14px;
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: all 0.2s;
+    transition: all 0.15s;
     flex-shrink: 0;
 }
 
 .btn-delete-project:hover {
     background: #dc2626;
-    transform: scale(1.1);
+    color: white;
+    border-color: #dc2626;
 }
 
 .add-project-card {
@@ -1371,83 +1387,72 @@ header {
     align-items: center;
     justify-content: flex-start;
     padding: 10px 12px;
-    border: 2px dashed #d1d5db;
-    background: #f9fafb;
+    border: 1px dashed #d1d5db;
+    background: #fafafa;
     cursor: pointer;
-    transition: all 0.2s;
+    transition: all 0.15s;
+    border-radius: 6px;
 }
 
 .add-project-card:hover {
-    border-color: #667eea;
-    background: #f0f4ff;
-    transform: translateX(3px);
+    border-color: #2563eb;
+    background: #eff6ff;
 }
 
 .add-project-icon {
-    font-size: 1.5em;
-    color: #667eea;
+    font-size: 18px;
+    color: #6b7280;
     margin-right: 10px;
-    font-weight: bold;
+    font-weight: 400;
+}
+
+.add-project-card:hover .add-project-icon {
+    color: #2563eb;
 }
 
 .add-project-text {
-    color: #667eea;
+    color: #6b7280;
     font-weight: 500;
-    font-size: 0.95em;
+    font-size: 13px;
 }
 
-/* ========== GEO 优化样式 ========== */
-
-/* GEO 按钮特殊样式 */
-.nav-btn.geo-btn {
-    background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
-    color: white;
-    border-color: transparent;
+.add-project-card:hover .add-project-text {
+    color: #2563eb;
 }
 
-.nav-btn.geo-btn:hover {
-    background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
-    transform: translateY(-1px);
-}
+/* ========== GEO 子导航 ========== */
 
-.nav-btn.geo-btn.active {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-}
-
-/* GEO 子导航 */
 .geo-subnav {
     display: flex;
-    gap: 6px;
+    gap: 4px;
     margin-bottom: 12px;
     flex-wrap: wrap;
-    background: rgba(255,255,255,0.9);
-    padding: 8px;
-    border-radius: 10px;
-    box-shadow: 0 2px 6px rgba(0,0,0,0.06);
+    background: #fff;
+    padding: 4px;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
 }
 
 .geo-nav-btn {
     padding: 8px 12px;
-    border: 2px solid transparent;
-    border-radius: 7px;
-    background: #f3f4f6;
-    color: #555;
+    border: none;
+    border-radius: 5px;
+    background: transparent;
+    color: #6b7280;
     cursor: pointer;
-    font-size: 0.85em;
-    font-weight: 600;
-    transition: all 0.2s;
+    font-size: 13px;
+    font-weight: 500;
+    transition: all 0.15s;
 }
 
 .geo-nav-btn:hover {
-    background: #e5e7eb;
-    color: #667eea;
+    background: #f3f4f6;
+    color: #374151;
 }
 
 .geo-nav-btn.active {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: #2563eb;
     color: white;
-    border-color: transparent;
-    box-shadow: 0 3px 10px rgba(102,126,234,0.25);
 }
 
 /* GEO 子视图 */
@@ -1466,14 +1471,16 @@ header {
     align-items: center;
     margin-bottom: 12px;
     padding: 12px 16px;
-    background: linear-gradient(135deg, rgba(102,126,234,0.08) 0%, rgba(118,75,162,0.08) 100%);
-    border-radius: 10px;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
 }
 
 .geo-section-header h3 {
     margin: 0;
-    color: #333;
-    font-size: 1.05em;
+    color: #1e293b;
+    font-size: 15px;
+    font-weight: 600;
 }
 
 /* GEO 标签页 */
@@ -1485,26 +1492,38 @@ header {
 }
 
 .geo-tab {
-    padding: 6px 12px;
-    border: 2px solid #e5e7eb;
-    border-radius: 20px;
-    background: white;
-    color: #555;
+    padding: 5px 12px;
+    border: 1px solid #e5e7eb;
+    border-radius: 14px;
+    background: #fff;
+    color: #6b7280;
     cursor: pointer;
-    font-size: 0.85em;
+    font-size: 12px;
     font-weight: 500;
-    transition: all 0.2s;
+    transition: all 0.15s;
 }
 
 .geo-tab:hover {
-    border-color: #667eea;
-    color: #667eea;
+    border-color: #d1d5db;
+    color: #374151;
+    background: #f9fafb;
 }
 
 .geo-tab.active {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: #2563eb;
     color: white;
-    border-color: transparent;
+    border-color: #2563eb;
+}
+
+.geo-tab-sm {
+    padding: 3px 10px;
+    font-size: 11px;
+    border-radius: 12px;
+}
+
+.geo-tab.danger:hover {
+    color: #dc2626;
+    border-color: #fca5a5;
 }
 
 /* GEO 列表 */
@@ -1515,18 +1534,16 @@ header {
 }
 
 .geo-list-item {
-    background: white;
+    background: #fff;
     border: 1px solid #e5e7eb;
-    border-radius: 8px;
+    border-radius: 6px;
     padding: 14px;
-    box-shadow: 0 2px 6px rgba(0,0,0,0.06);
-    transition: all 0.2s;
+    transition: all 0.15s;
 }
 
 .geo-list-item:hover {
-    border-color: #667eea;
-    box-shadow: 0 4px 12px rgba(102,126,234,0.15);
-    transform: translateY(-1px);
+    border-color: #d1d5db;
+    background: #fafafa;
 }
 
 .geo-list-header {
@@ -1538,8 +1555,8 @@ header {
 
 .geo-list-title {
     font-weight: 600;
-    color: #333;
-    font-size: 0.95em;
+    color: #111827;
+    font-size: 14px;
 }
 
 .geo-list-badge {
@@ -1547,8 +1564,8 @@ header {
     align-items: center;
     padding: 3px 10px;
     border-radius: 12px;
-    font-size: 0.75em;
-    font-weight: 600;
+    font-size: 11px;
+    font-weight: 500;
 }
 
 .badge-brand {
@@ -1585,8 +1602,8 @@ header {
     display: flex;
     gap: 10px;
     flex-wrap: wrap;
-    font-size: 0.8em;
-    color: #666;
+    font-size: 12px;
+    color: #6b7280;
 }
 
 .geo-list-actions {
@@ -1602,23 +1619,25 @@ header {
     border: none;
     border-radius: 5px;
     cursor: pointer;
-    font-size: 0.8em;
-    transition: all 0.2s;
+    font-size: 12px;
+    transition: all 0.15s;
+    font-weight: 500;
 }
 
 /* GEO 内容编辑器 */
 .geo-content-editor {
-    background: white;
-    border-radius: 10px;
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
     padding: 16px;
-    box-shadow: 0 2px 6px rgba(0,0,0,0.06);
 }
 
 .geo-check-result {
     margin-top: 12px;
     padding: 12px;
-    border-radius: 8px;
+    border-radius: 6px;
     background: #f9fafb;
+    border: 1px solid #f0f0f0;
 }
 
 .geo-check-result .check-pass {
@@ -1633,7 +1652,7 @@ header {
 
 .geo-check-result ul {
     margin: 8px 0 0 20px;
-    font-size: 0.9em;
+    font-size: 13px;
     color: #555;
 }
 
@@ -1644,15 +1663,15 @@ header {
 /* GEO 进度条 */
 .geo-progress {
     background: #e5e7eb;
-    border-radius: 10px;
-    height: 24px;
+    border-radius: 12px;
+    height: 20px;
     overflow: hidden;
     margin: 12px 0;
 }
 
 .geo-progress-bar {
     height: 100%;
-    background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+    background: #2563eb;
     transition: width 0.3s;
     display: flex;
     align-items: center;
@@ -1661,8 +1680,8 @@ header {
 
 .geo-progress-text {
     color: white;
-    font-size: 0.8em;
-    font-weight: 600;
+    font-size: 11px;
+    font-weight: 500;
 }
 
 /* GEO 统计卡片（6列） */
@@ -1675,7 +1694,7 @@ header {
 
 /* GEO 竞品卡片 */
 .geo-competitor-card {
-    background: linear-gradient(135deg, #fff 0%, #fef2f2 100%);
+    background: #fff;
     border: 1px solid #fecaca;
 }
 
@@ -1734,23 +1753,17 @@ header {
     color: #0e7490;
 }
 
-/* 响应式调整 */
-@media (max-width: 1200px) {
-    .geo-stats-grid {
-        grid-template-columns: repeat(3, 1fr);
-    }
-}
-
 /* ========== 分页样式 ========== */
+
 .pagination-container {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 16px;
-    background: white;
-    border-radius: 8px;
+    padding: 12px 16px;
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 6px;
     margin-top: 12px;
-    box-shadow: 0 2px 6px rgba(0,0,0,0.06);
     flex-wrap: wrap;
     gap: 12px;
 }
@@ -1759,49 +1772,74 @@ header {
     display: flex;
     align-items: center;
     color: #4b5563;
-    font-size: 0.9em;
+    font-size: 13px;
 }
 
 .pagination-info {
     color: #6b7280;
-    font-size: 0.9em;
+    font-size: 13px;
 }
 
 .pagination-buttons {
     display: flex;
-    gap: 8px;
+    gap: 6px;
     align-items: center;
 }
 
 .pagination-btn {
-    padding: 6px 12px;
+    padding: 5px 10px;
     border: 1px solid #d1d5db;
-    background: white;
-    border-radius: 6px;
+    background: #fff;
+    border-radius: 5px;
     cursor: pointer;
-    font-size: 0.9em;
+    font-size: 12px;
     color: #4b5563;
-    transition: all 0.2s;
+    transition: all 0.15s;
+    font-weight: 500;
 }
 
 .pagination-btn:hover:not(:disabled) {
-    background: #f3f4f6;
-    border-color: #667eea;
-    color: #667eea;
+    background: #f9fafb;
+    border-color: #2563eb;
+    color: #2563eb;
 }
 
 .pagination-btn:disabled {
-    opacity: 0.5;
+    opacity: 0.4;
     cursor: not-allowed;
 }
 
 .pagination-current {
     color: #4b5563;
-    font-size: 0.9em;
+    font-size: 13px;
     padding: 0 8px;
 }
 
+/* ========== 响应式 ========== */
+
+@media (max-width: 1200px) {
+    .geo-stats-grid {
+        grid-template-columns: repeat(3, 1fr);
+    }
+}
+
 @media (max-width: 768px) {
+    .main-content {
+        flex-direction: column;
+    }
+
+    .sidebar {
+        width: 100%;
+    }
+
+    .stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .charts-row, .charts-row-bottom {
+        grid-template-columns: 1fr;
+    }
+
     .pagination-container {
         flex-direction: column;
         text-align: center;
@@ -1819,18 +1857,15 @@ header {
     .geo-stats-grid {
         grid-template-columns: repeat(2, 1fr);
     }
-
-    .stats-grid {
-        grid-template-columns: repeat(2, 1fr);
-    }
 }
 
-/* ========== GEO 空状态优化 ========== */
+/* ========== GEO 空状态 ========== */
 
 .geo-list .empty-state {
-    background: white;
-    border: 2px dashed #e5e7eb;
+    background: #fff;
+    border: 1px dashed #e5e7eb;
     color: #4b5563;
+    border-radius: 6px;
 }
 
 .geo-list .empty-state .empty-state-icon {
@@ -1841,4 +1876,3 @@ header {
     color: #6b7280;
     margin: 6px 0;
 }
-

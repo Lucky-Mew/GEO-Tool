@@ -219,8 +219,14 @@ class DocumentProcessor:
 
     def save_document(self, project_id: Optional[int], original_filename: str,
                      storage_path: str, file_type: str, file_size: int,
-                     tags: str = '') -> int:
-        """保存文档记录（tags 用逗号分隔）"""
+                     tags: str = '', doc_category: str = 'brand',
+                     competitor_brand_id: Optional[int] = None) -> int:
+        """保存文档记录
+
+        Args:
+            doc_category: 三大分类：brand / competitor / reference
+            competitor_brand_id: 竞品品牌ID（仅当 doc_category='competitor' 时有意义）
+        """
         conn = get_connection()
         cursor = conn.cursor()
 
@@ -230,9 +236,11 @@ class DocumentProcessor:
         try:
             cursor.execute('''
                 INSERT INTO geo_documents
-                (project_id, filename, original_filename, file_type, file_size, category, storage_path, is_parsed)
-                VALUES (?, ?, ?, ?, ?, ?, ?, 0)
-            ''', (project_id, safe_filename, original_filename, file_type, file_size, tags, storage_path))
+                (project_id, filename, original_filename, file_type, file_size, category,
+                 storage_path, is_parsed, doc_category, competitor_brand_id)
+                VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?)
+            ''', (project_id, safe_filename, original_filename, file_type, file_size,
+                  tags, storage_path, doc_category, competitor_brand_id))
 
             doc_id = cursor.lastrowid
             conn.commit()
@@ -264,6 +272,128 @@ class DocumentProcessor:
         finally:
             conn.close()
 
+    def save_manual_document(self, project_id: Optional[int], title: str, content: str,
+                             tags: str = '', doc_category: str = 'brand',
+                             competitor_brand_id: Optional[int] = None) -> int:
+        """手动创建文档（不通过文件上传）
+
+        Returns:
+            doc_id
+        """
+        conn = get_connection()
+        cursor = conn.cursor()
+
+        safe_filename = f"manual_{int(datetime.now().timestamp())}_{title[:50]}"
+        word_count = len(content)
+        preview = content[:200] + '...' if len(content) > 200 else content
+
+        try:
+            cursor.execute('''
+                INSERT INTO geo_documents
+                (project_id, filename, original_filename, file_type, file_size, category,
+                 storage_path, content_preview, word_count, is_parsed,
+                 doc_category, competitor_brand_id)
+                VALUES (?, ?, ?, 'manual', 0, ?, ?, ?, ?, 1, ?, ?)
+            ''', (project_id, safe_filename, title, tags, '', preview, word_count,
+                  doc_category, competitor_brand_id))
+
+            doc_id = cursor.lastrowid
+            conn.commit()
+            return doc_id
+        except Exception as e:
+            conn.rollback()
+            raise e
+        finally:
+            conn.close()
+
+    def update_document_meta(self, doc_id: int, title: Optional[str] = None,
+                             tags: Optional[str] = None,
+                             doc_category: Optional[str] = None,
+                             competitor_brand_id: Optional[int] = None):
+        """更新文档元信息（标题、标签、分类、竞品品牌）"""
+        conn = get_connection()
+        cursor = conn.cursor()
+
+        updates = []
+        params = []
+
+        if title is not None:
+            updates.append('original_filename = ?')
+            updates.append('filename = ?')
+            params.extend([title, title])
+
+        if tags is not None:
+            updates.append('category = ?')
+            params.append(tags)
+
+        if doc_category is not None:
+            updates.append('doc_category = ?')
+            params.append(doc_category)
+
+        if competitor_brand_id is not None or doc_category == 'competitor':
+            # 只有显式传了才改；改到非竞品分类时清空
+            if doc_category and doc_category != 'competitor':
+                updates.append('competitor_brand_id = NULL')
+            elif competitor_brand_id is not None:
+                updates.append('competitor_brand_id = ?')
+                params.append(competitor_brand_id)
+
+        if not updates:
+            conn.close()
+            return
+
+        updates.append('updated_at = CURRENT_TIMESTAMP')
+        params.append(doc_id)
+
+        try:
+            cursor.execute(f'''
+                UPDATE geo_documents
+                SET {', '.join(updates)}
+                WHERE id = ?
+            ''', params)
+            conn.commit()
+        except Exception as e:
+            conn.rollback()
+            raise e
+        finally:
+            conn.close()
+
+    def update_document_content(self, doc_id: int, content: str):
+        """更新文档正文内容，同时重新切分 chunks"""
+        conn = get_connection()
+        cursor = conn.cursor()
+
+        word_count = len(content)
+        preview = content[:200] + '...' if len(content) > 200 else content
+
+        try:
+            # 更新文档主表
+            cursor.execute('''
+                UPDATE geo_documents
+                SET content_preview = ?, word_count = ?, is_parsed = 1,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = ?
+            ''', (preview, word_count, doc_id))
+
+            # 清掉旧 chunks
+            cursor.execute('DELETE FROM geo_document_chunks WHERE document_id = ?', (doc_id,))
+
+            # 重新切分并插入
+            chunks = self.split_into_chunks(content)
+            for idx, chunk in enumerate(chunks):
+                cursor.execute('''
+                    INSERT INTO geo_document_chunks
+                    (document_id, chunk_index, content, content_length, is_embedded)
+                    VALUES (?, ?, ?, ?, 0)
+                ''', (doc_id, idx, chunk, len(chunk)))
+
+            conn.commit()
+        except Exception as e:
+            conn.rollback()
+            raise e
+        finally:
+            conn.close()
+
     def save_chunks(self, doc_id: int, chunks: List[str]):
         """保存文档片段"""
         conn = get_connection()
@@ -283,14 +413,31 @@ class DocumentProcessor:
         finally:
             conn.close()
 
-    def get_documents(self, project_id: Optional[int], tag: Optional[str] = None) -> List[Dict]:
-        """获取文档列表（tag 可选，模糊匹配）"""
+    def get_documents(self, project_id: Optional[int],
+                      category: Optional[str] = None,
+                      tag: Optional[str] = None,
+                      competitor_brand_id: Optional[int] = None) -> List[Dict]:
+        """获取文档列表
+
+        Args:
+            category: 三大分类筛选：brand / competitor / reference
+            tag: 标签模糊匹配
+            competitor_brand_id: 竞品品牌ID筛选
+        """
         conn = get_connection()
         cursor = conn.cursor()
 
         try:
             query = 'SELECT * FROM geo_documents WHERE project_id IS ?'
             params = [project_id]
+
+            if category:
+                query += ' AND doc_category = ?'
+                params.append(category)
+
+            if competitor_brand_id is not None:
+                query += ' AND competitor_brand_id = ?'
+                params.append(competitor_brand_id)
 
             if tag:
                 query += ' AND category LIKE ?'
@@ -299,12 +446,25 @@ class DocumentProcessor:
             query += ' ORDER BY created_at DESC'
             cursor.execute(query, params)
             docs = [dict(row) for row in cursor.fetchall()]
-            # 把 category 字段改名为 tags
+            # 把 category 字段改名为 tags（category 字段现在存标签，doc_category 存三大分类）
             for doc in docs:
                 doc['tags'] = doc.get('category', '')
+                # 兼容旧数据：如果 doc_category 为空，根据 tags 推断
+                if not doc.get('doc_category'):
+                    doc['doc_category'] = self._infer_category(doc.get('tags', ''))
             return docs
         finally:
             conn.close()
+
+    def _infer_category(self, tags: str) -> str:
+        """根据标签推断三大分类（兼容旧数据）"""
+        if not tags:
+            return 'brand'
+        if '参考文章' in tags or '豆包引用' in tags:
+            return 'reference'
+        if '竞品' in tags:
+            return 'competitor'
+        return 'brand'
 
     def get_document(self, doc_id: int) -> Optional[Dict]:
         """获取单个文档"""
@@ -423,19 +583,38 @@ class DocumentProcessor:
         finally:
             conn.close()
 
-    def get_all_chunks_for_project(self, project_id: Optional[int]) -> List[Dict]:
-        """获取项目的所有文档片段（用于检索）"""
+    def get_all_chunks_for_project(self, project_id: Optional[int],
+                                   category: Optional[str] = None) -> List[Dict]:
+        """获取项目的所有文档片段（用于检索）
+
+        Args:
+            category: 按三大分类过滤：brand / competitor / reference
+        """
         conn = get_connection()
         cursor = conn.cursor()
 
         try:
-            cursor.execute('''
-                SELECT c.*, d.filename, d.original_filename, d.category
+            query = '''
+                SELECT c.*, d.filename, d.original_filename, d.category as tags, d.doc_category, d.competitor_brand_id
                 FROM geo_document_chunks c
                 JOIN geo_documents d ON c.document_id = d.id
                 WHERE d.project_id IS ?
-                ORDER BY d.created_at DESC, c.chunk_index
-            ''', (project_id,))
-            return [dict(row) for row in cursor.fetchall()]
+            '''
+            params = [project_id]
+
+            if category:
+                query += ' AND d.doc_category = ?'
+                params.append(category)
+
+            query += ' ORDER BY d.created_at DESC, c.chunk_index'
+            cursor.execute(query, params)
+            chunks = [dict(row) for row in cursor.fetchall()]
+
+            # 兼容旧数据：doc_category 为空的根据 tags 推断
+            for chunk in chunks:
+                if not chunk.get('doc_category'):
+                    chunk['doc_category'] = self._infer_category(chunk.get('tags', ''))
+
+            return chunks
         finally:
             conn.close()

@@ -460,11 +460,11 @@ function renderTrendChart(stats) {
                 height: 20,
                 handleSize: '80%',
                 handleStyle: {
-                    color: '#667eea',
-                    borderColor: '#667eea'
+                    color: '#2563eb',
+                    borderColor: '#2563eb'
                 },
                 fillerStyle: {
-                    color: 'rgba(102, 126, 234, 0.2)'
+                    color: 'rgba(37, 99, 235, 0.15)'
                 },
                 backgroundColor: '#f0f0f0',
                 showDetail: false
@@ -488,18 +488,18 @@ function renderTrendChart(stats) {
                 showSymbol: true,
                 areaStyle: {
                     color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-                        {offset: 0, color: 'rgba(102, 126, 234, 0.3)'},
-                        {offset: 1, color: 'rgba(102, 126, 234, 0.05)'}
+                        {offset: 0, color: 'rgba(37, 99, 235, 0.2)'},
+                        {offset: 1, color: 'rgba(37, 99, 235, 0.02)'}
                     ])
                 },
-                lineStyle: {color: '#667eea', width: 2},
+                lineStyle: {color: '#2563eb', width: 2},
                 itemStyle: {
-                    color: '#667eea'
+                    color: '#2563eb'
                 },
                 label: {
                     show: true,
                     position: 'top',
-                    color: '#667eea',
+                    color: '#2563eb',
                     formatter: '{c}%'
                 }
             },
@@ -511,10 +511,10 @@ function renderTrendChart(stats) {
                 barWidth: '20%',
                 itemStyle: {
                     color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-                        {offset: 0, color: 'rgba(245, 158, 11, 0.9)'},
-                        {offset: 1, color: 'rgba(245, 158, 11, 0.5)'}
+                        {offset: 0, color: 'rgba(100, 116, 139, 0.8)'},
+                        {offset: 1, color: 'rgba(148, 163, 184, 0.5)'}
                     ]),
-                    borderRadius: [4, 4, 0, 0]
+                    borderRadius: [3, 3, 0, 0]
                 }
             }
         ]
@@ -532,7 +532,7 @@ function renderPositionChart(positionData, brandName) {
     }
 
     const positionLabels = {'first': '开头', 'middle': '中间', 'last': '结尾'};
-    const colorList = ['#667eea', '#f59e0b', '#10b981'];
+    const colorList = ['#2563eb', '#64748b', '#94a3b8'];
     const categories = [];
     const values = [];
     let total = 0;
@@ -1506,7 +1506,7 @@ async function loadSettings() {
 async function saveSettings() {
     const statusEl = document.getElementById('settingsStatus');
     statusEl.textContent = '保存中...';
-    statusEl.style.color = '#667eea';
+    statusEl.style.color = '#2563eb';
 
     try {
         const response = await fetch('/api/global-settings', {
@@ -1544,7 +1544,7 @@ async function detectProfile() {
     const statusEl = document.getElementById('settingsStatus');
 
     statusEl.textContent = '检测中...';
-    statusEl.style.color = '#667eea';
+    statusEl.style.color = '#2563eb';
 
     try {
         const response = await fetch('/api/detect-profile', {
@@ -1680,7 +1680,10 @@ async function continueAfterCaptcha() {
 
 let currentGeoView = 'documents';
 let currentKeywordFilter = 'all';
-let currentDocFilter = 'all';
+let currentDocCategory = 'brand';       // 当前文档分类：brand / competitor / reference
+let currentCompetitorBrandId = null;    // 当前选中的竞品品牌ID（null=全部）
+let competitorBrands = [];              // 竞品品牌列表缓存
+let rankingSelectedBrands = [];         // 排行文选中的竞品品牌列表
 let geoTierChart = null;
 let geoPositionChart = null;
 
@@ -1708,6 +1711,14 @@ function initGeoView() {
     // 初始化 GEO 视图
     showGeoView('documents');
     loadDocuments();
+}
+
+function goToDailyPlan() {
+    let url = '/geo/daily-plan';
+    if (currentProjectId) {
+        url += '?project_id=' + currentProjectId;
+    }
+    window.location.href = url;
 }
 
 function showGeoView(viewName) {
@@ -2174,45 +2185,79 @@ async function deleteKeyword(id) {
 
 // ========== 文档库 ==========
 
-function filterDocuments(filter) {
-    currentDocFilter = filter;
-    document.querySelectorAll('#geoDocumentsView .geo-tab').forEach(t => t.classList.remove('active'));
-    event.target.classList.add('active');
+const CATEGORY_INFO = {
+    brand: {
+        icon: '📦',
+        name: '品牌素材',
+        desc: '💡 自己的品牌资料，生成内容时作为事实依据',
+        emptyTitle: '暂无品牌素材',
+        emptyTip: '上传品牌介绍、技术资料、案例等'
+    },
+    competitor: {
+        icon: '⚔️',
+        name: '竞品资料',
+        desc: '💡 竞品品牌的信息，用于对比分析和排行文章',
+        emptyTitle: '暂无竞品资料',
+        emptyTip: '先添加竞品品牌，再上传对应资料'
+    },
+    reference: {
+        icon: '📖',
+        name: '参考文章',
+        desc: '💡 优质行业文章，生成时参考写作风格和深度',
+        emptyTitle: '暂无参考文章',
+        emptyTip: '从豆包引用中导入或手动上传'
+    }
+};
+
+function switchDocCategory(category) {
+    currentDocCategory = category;
+    currentCompetitorBrandId = null;
+
+    // 更新三大分类 tab 高亮
+    const tabs = document.querySelectorAll('#docCategoryBar .geo-tab');
+    const cats = ['brand', 'competitor', 'reference'];
+    tabs.forEach((t, idx) => {
+        t.classList.toggle('active', cats[idx] === category);
+    });
+
+    // 更新描述文案
+    const info = CATEGORY_INFO[category];
+    document.getElementById('docCategoryDesc').textContent = info.desc;
+
+    // 竞品品牌栏显示控制
+    document.getElementById('competitorBrandBar').style.display = (category === 'competitor') ? 'block' : 'none';
+
+    // 如果是竞品分类，加载竞品品牌列表
+    if (category === 'competitor') {
+        loadCompetitorBrands();
+    }
+
+    loadDocuments();
+}
+
+function switchCompetitorBrand(brandId) {
+    currentCompetitorBrandId = brandId;
+
+    // 更新高亮
+    document.getElementById('competitorAllBtn').classList.toggle('active', brandId === null);
+    document.querySelectorAll('#competitorBrandList .geo-tab').forEach(t => {
+        t.classList.toggle('active', parseInt(t.dataset.brandId) === brandId);
+    });
+
     loadDocuments();
 }
 
 async function loadDocuments() {
     if (!currentProjectId) return;
     try {
-        let url = `/api/geo/documents?project_id=${currentProjectId}`;
-        if (currentDocFilter !== 'all') {
-            url += `&tag=${encodeURIComponent(currentDocFilter)}`;
+        let url = `/api/geo/documents?project_id=${currentProjectId}&category=${currentDocCategory}`;
+        if (currentDocCategory === 'competitor' && currentCompetitorBrandId) {
+            url += `&competitor_brand_id=${currentCompetitorBrandId}`;
         }
         const response = await fetch(url);
         const data = await response.json();
         if (data.success) {
             renderDocuments(data.documents);
-            renderSummaries(data.summaries);
-
-            // 动态生成标签过滤栏
-            const tagBar = document.getElementById('geoDocumentTagBar');
-            if (tagBar && data.documents) {
-                const allTags = new Set();
-                data.documents.forEach(doc => {
-                    if (doc.tags) {
-                        doc.tags.split(',').forEach(t => {
-                            const tag = t.trim();
-                            if (tag) allTags.add(tag);
-                        });
-                    }
-                });
-
-                let tagHtml = `<button class="geo-tab ${currentDocFilter === 'all' ? 'active' : ''}" onclick="filterDocuments('all')">全部</button>`;
-                allTags.forEach(tag => {
-                    tagHtml += `<button class="geo-tab ${currentDocFilter === tag ? 'active' : ''}" onclick="filterDocuments('${escapeHtml(tag)}')">${escapeHtml(tag)}</button>`;
-                });
-                tagBar.innerHTML = tagHtml;
-            }
         }
     } catch (error) {
         console.error('加载文档失败:', error);
@@ -2221,12 +2266,14 @@ async function loadDocuments() {
 
 function renderDocuments(documents) {
     const container = document.getElementById('geoDocumentList');
+    const info = CATEGORY_INFO[currentDocCategory];
+
     if (!documents || documents.length === 0) {
         container.innerHTML = `
             <div class="empty-state" style="background:white; border:2px dashed #e5e7eb; border-radius:8px">
                 <div class="empty-state-icon" style="color:#9ca3af">📄</div>
-                <p style="color:#4b5563; font-weight:500">暂无文档</p>
-                <p style="color:#6b7280">点击"上传文档"添加</p>
+                <p style="color:#4b5563; font-weight:500">${info.emptyTitle}</p>
+                <p style="color:#6b7280">${info.emptyTip}</p>
             </div>
         `;
         return;
@@ -2237,12 +2284,23 @@ function renderDocuments(documents) {
         markdown: '📝',
         word: '📘',
         pdf: '📕',
-        powerpoint: '📊'
+        powerpoint: '📊',
+        url: '🔗',
+        manual: '✍️'
     };
 
     container.innerHTML = documents.map(doc => {
         const tags = doc.tags ? doc.tags.split(',').map(t => t.trim()).filter(t => t) : [];
         const tagBadges = tags.map(tag => `<span class="geo-list-badge" style="background:#f0f9ff; color:#0369a1">${escapeHtml(tag)}</span>`).join('');
+
+        // 竞品分类下显示所属品牌
+        let brandBadge = '';
+        if (currentDocCategory === 'competitor' && doc.competitor_brand_id) {
+            const brand = competitorBrands.find(b => b.id === doc.competitor_brand_id);
+            if (brand) {
+                brandBadge = `<span class="geo-list-badge" style="background:#fef3c7; color:#92400e">⚔️ ${escapeHtml(brand.brand_name)}</span>`;
+            }
+        }
 
         return `
             <div class="geo-list-item">
@@ -2250,14 +2308,18 @@ function renderDocuments(documents) {
                     <span class="geo-list-title">
                         ${typeIcons[doc.file_type] || '📄'} ${escapeHtml(doc.original_filename)}
                     </span>
-                    ${tagBadges}
+                    <span style="display:flex; gap:6px; align-items:center;">
+                        ${brandBadge}
+                        ${tagBadges}
+                    </span>
                 </div>
                 <div class="geo-list-meta">
                     ${doc.word_count || 0} 字 · ${formatFileSize(doc.file_size)} · ${doc.is_parsed ? '✅ 已解析' : '⏳ 待解析'}
                 </div>
                 ${doc.content_preview ? `<div style="margin:8px 0; color:#666; font-size:0.9em">${escapeHtml(doc.content_preview)}</div>` : ''}
                 <div class="geo-list-actions">
-                    <button class="btn-edit" onclick="openViewDocumentModal(${doc.id}, '${escapeHtml(doc.original_filename)}')">👁️ 查看</button>
+                    <button class="btn-edit" onclick="openDocDetail(${doc.id})">✏️ 编辑</button>
+                    <button class="btn-view" onclick="openViewDocumentModal(${doc.id}, '${escapeHtml(doc.original_filename)}')">👁️ 查看</button>
                     <button class="btn-delete" onclick="deleteDocument(${doc.id})">🗑️ 删除</button>
                 </div>
             </div>
@@ -2310,14 +2372,35 @@ function formatFileSize(bytes) {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
 }
 
+// ========== 上传文档 ==========
+
 function openUploadDocumentModal() {
     document.getElementById('documentFile').value = '';
+    document.getElementById('newDocCategory').value = currentDocCategory;
     document.getElementById('newDocTags').value = '';
+    onDocCategoryChange();
     document.getElementById('uploadDocumentModal').style.display = 'flex';
 }
 
 function closeUploadDocumentModal() {
     document.getElementById('uploadDocumentModal').style.display = 'none';
+}
+
+function onDocCategoryChange() {
+    const cat = document.getElementById('newDocCategory').value;
+    const brandGroup = document.getElementById('competitorBrandSelectGroup');
+    brandGroup.style.display = (cat === 'competitor') ? 'block' : 'none';
+
+    // 刷新竞品品牌下拉
+    if (cat === 'competitor') {
+        loadCompetitorBrands().then(() => {
+            const select = document.getElementById('newDocCompetitorBrand');
+            select.innerHTML = '<option value="">请选择竞品品牌</option>';
+            competitorBrands.forEach(b => {
+                select.innerHTML += `<option value="${b.id}">${escapeHtml(b.brand_name)}</option>`;
+            });
+        });
+    }
 }
 
 async function uploadDocument() {
@@ -2329,10 +2412,25 @@ async function uploadDocument() {
         return;
     }
 
+    const category = document.getElementById('newDocCategory').value;
+    const tags = document.getElementById('newDocTags').value.trim();
+    let competitor_brand_id = null;
+    if (category === 'competitor') {
+        competitor_brand_id = document.getElementById('newDocCompetitorBrand').value;
+        if (!competitor_brand_id) {
+            alert('请选择所属竞品品牌');
+            return;
+        }
+    }
+
     const formData = new FormData();
     formData.append('file', file);
     formData.append('project_id', currentProjectId);
-    formData.append('tags', document.getElementById('newDocTags').value);
+    formData.append('category', category);
+    formData.append('tags', tags);
+    if (competitor_brand_id) {
+        formData.append('competitor_brand_id', competitor_brand_id);
+    }
 
     try {
         const response = await fetch('/api/geo/documents', {
@@ -2351,6 +2449,406 @@ async function uploadDocument() {
         console.error('上传失败:', error);
         alert('上传失败');
     }
+}
+
+// ========== 手动创建文档 ==========
+
+let currentEditingDocId = null;
+
+function openManualDocModal() {
+    document.getElementById('manualDocTitle').value = '';
+    document.getElementById('manualDocCategory').value = currentDocCategory;
+    document.getElementById('manualDocTags').value = '';
+    document.getElementById('manualDocContent').value = '';
+    document.getElementById('manualDocWordCount').textContent = '0';
+    onManualDocCategoryChange();
+    document.getElementById('manualDocModal').style.display = 'flex';
+}
+
+function closeManualDocModal() {
+    document.getElementById('manualDocModal').style.display = 'none';
+}
+
+function onManualDocCategoryChange() {
+    const cat = document.getElementById('manualDocCategory').value;
+    const brandGroup = document.getElementById('manualCompetitorBrandGroup');
+    brandGroup.style.display = (cat === 'competitor') ? 'block' : 'none';
+
+    if (cat === 'competitor') {
+        loadCompetitorBrands().then(() => {
+            const select = document.getElementById('manualDocCompetitorBrand');
+            select.innerHTML = '<option value="">请选择竞品品牌</option>';
+            competitorBrands.forEach(b => {
+                select.innerHTML += `<option value="${b.id}">${escapeHtml(b.brand_name)}</option>`;
+            });
+        });
+    }
+}
+
+// 字数统计（手动文档）
+document.addEventListener('DOMContentLoaded', function() {
+    const manualContent = document.getElementById('manualDocContent');
+    if (manualContent) {
+        manualContent.addEventListener('input', function() {
+            document.getElementById('manualDocWordCount').textContent = this.value.length;
+        });
+    }
+    const editContent = document.getElementById('editDocContent');
+    if (editContent) {
+        editContent.addEventListener('input', function() {
+            document.getElementById('editDocWordCount').textContent = this.value.length;
+        });
+    }
+});
+
+async function saveManualDocument() {
+    if (!currentProjectId) return;
+
+    const title = document.getElementById('manualDocTitle').value.trim();
+    const content = document.getElementById('manualDocContent').value.trim();
+    const category = document.getElementById('manualDocCategory').value;
+    const tags = document.getElementById('manualDocTags').value.trim();
+
+    if (!title) { alert('请输入文档标题'); return; }
+    if (!content) { alert('请输入文档内容'); return; }
+
+    let competitor_brand_id = null;
+    if (category === 'competitor') {
+        competitor_brand_id = document.getElementById('manualDocCompetitorBrand').value;
+        if (!competitor_brand_id) {
+            alert('请选择所属竞品品牌');
+            return;
+        }
+    }
+
+    try {
+        const response = await fetch('/api/geo/documents/manual', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                project_id: currentProjectId,
+                title,
+                content,
+                tags,
+                category,
+                competitor_brand_id
+            })
+        });
+        const data = await response.json();
+        if (data.success) {
+            closeManualDocModal();
+            alert('保存成功！共 ' + data.word_count + ' 字，' + data.chunks + ' 个片段');
+            loadDocuments();
+        } else {
+            alert('保存失败: ' + data.error);
+        }
+    } catch (error) {
+        console.error('保存失败:', error);
+        alert('保存失败');
+    }
+}
+
+// ========== 文档编辑 ==========
+
+async function openDocDetail(docId) {
+    currentEditingDocId = docId;
+
+    try {
+        const response = await fetch(`/api/geo/documents/${docId}`);
+        const data = await response.json();
+        if (!data.success) {
+            alert('加载失败: ' + data.error);
+            return;
+        }
+
+        const doc = data.document;
+        document.getElementById('editDocTitle').value = doc.original_filename || '';
+        document.getElementById('editDocCategory').value = doc.doc_category || 'brand';
+        document.getElementById('editDocTags').value = doc.category || '';
+
+        // 文件类型提示
+        const typeNames = {
+            manual: '手动创建',
+            text: 'TXT 文本',
+            markdown: 'Markdown',
+            word: 'Word 文档',
+            pdf: 'PDF 文档',
+            powerpoint: 'PPT 演示'
+        };
+        const typeTip = doc.file_type === 'manual'
+            ? '📝 手动创建的文档'
+            : `📎 源文件：${typeNames[doc.file_type] || doc.file_type}（修改仅影响检索内容，原始文件保留）`;
+        document.getElementById('editDocFileType').textContent = typeTip;
+
+        // 竞品品牌
+        onEditDocCategoryChange();
+        if (doc.doc_category === 'competitor' && doc.competitor_brand_id) {
+            // 等品牌加载完再选中
+            await loadCompetitorBrands();
+            const select = document.getElementById('editDocCompetitorBrand');
+            select.innerHTML = '<option value="">请选择竞品品牌</option>';
+            competitorBrands.forEach(b => {
+                select.innerHTML += `<option value="${b.id}">${escapeHtml(b.brand_name)}</option>`;
+            });
+            select.value = doc.competitor_brand_id;
+        }
+
+        // 正文内容
+        const fullContent = data.full_content || '';
+        document.getElementById('editDocContent').value = fullContent;
+        document.getElementById('editDocWordCount').textContent = fullContent.length;
+
+        document.getElementById('docDetailModal').style.display = 'flex';
+    } catch (error) {
+        console.error('加载文档失败:', error);
+        alert('加载失败');
+    }
+}
+
+function closeDocDetail() {
+    currentEditingDocId = null;
+    document.getElementById('docDetailModal').style.display = 'none';
+}
+
+function onEditDocCategoryChange() {
+    const cat = document.getElementById('editDocCategory').value;
+    const brandGroup = document.getElementById('editCompetitorBrandGroup');
+    brandGroup.style.display = (cat === 'competitor') ? 'block' : 'none';
+
+    if (cat === 'competitor') {
+        loadCompetitorBrands().then(() => {
+            const select = document.getElementById('editDocCompetitorBrand');
+            const currentVal = select.value;
+            select.innerHTML = '<option value="">请选择竞品品牌</option>';
+            competitorBrands.forEach(b => {
+                select.innerHTML += `<option value="${b.id}">${escapeHtml(b.brand_name)}</option>`;
+            });
+            if (currentVal) select.value = currentVal;
+        });
+    }
+}
+
+async function saveDocEdit() {
+    if (!currentEditingDocId) return;
+
+    const title = document.getElementById('editDocTitle').value.trim();
+    const category = document.getElementById('editDocCategory').value;
+    const tags = document.getElementById('editDocTags').value.trim();
+    const content = document.getElementById('editDocContent').value;
+
+    if (!title) { alert('文档标题不能为空'); return; }
+    if (!content.trim()) { alert('文档内容不能为空'); return; }
+
+    let competitor_brand_id = null;
+    if (category === 'competitor') {
+        competitor_brand_id = document.getElementById('editDocCompetitorBrand').value;
+        if (!competitor_brand_id) {
+            alert('请选择所属竞品品牌');
+            return;
+        }
+    }
+
+    const body = { title, category, tags, content };
+    if (category === 'competitor') {
+        body.competitor_brand_id = parseInt(competitor_brand_id);
+    } else {
+        body.competitor_brand_id = null;
+    }
+
+    try {
+        const response = await fetch(`/api/geo/documents/${currentEditingDocId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+        });
+        const data = await response.json();
+        if (data.success) {
+            closeDocDetail();
+            alert('保存成功！');
+            loadDocuments();
+        } else {
+            alert('保存失败: ' + data.error);
+        }
+    } catch (error) {
+        console.error('保存失败:', error);
+        alert('保存失败');
+    }
+}
+
+// ========== 竞品品牌管理 ==========
+
+async function loadCompetitorBrands() {
+    if (!currentProjectId) return;
+    try {
+        const response = await fetch(`/api/geo/competitor-brands?project_id=${currentProjectId}`);
+        const data = await response.json();
+        if (data.success) {
+            competitorBrands = data.brands;
+            renderCompetitorBrandBar();
+        }
+    } catch (error) {
+        console.error('加载竞品品牌失败:', error);
+    }
+}
+
+function renderCompetitorBrandBar() {
+    const container = document.getElementById('competitorBrandList');
+    if (!competitorBrands || competitorBrands.length === 0) {
+        container.innerHTML = '<span style="font-size:0.85em; color:#9ca3af;">暂无竞品品牌，点击右侧添加</span>';
+        return;
+    }
+
+    container.innerHTML = competitorBrands.map(b => `
+        <button class="geo-tab geo-tab-sm ${currentCompetitorBrandId === b.id ? 'active' : ''}"
+                data-brand-id="${b.id}"
+                onclick="switchCompetitorBrand(${b.id})">
+            ${escapeHtml(b.brand_name)}
+        </button>
+    `).join('');
+}
+
+function openAddCompetitorBrandModal() {
+    document.getElementById('newCompetitorBrandName').value = '';
+    document.getElementById('newCompetitorBrandAlias').value = '';
+    document.getElementById('newCompetitorBrandIndustry').value = '';
+    document.getElementById('newCompetitorBrandNotes').value = '';
+    document.getElementById('addCompetitorBrandModal').style.display = 'flex';
+}
+
+function closeAddCompetitorBrandModal() {
+    document.getElementById('addCompetitorBrandModal').style.display = 'none';
+}
+
+async function addCompetitorBrand() {
+    const name = document.getElementById('newCompetitorBrandName').value.trim();
+    if (!name) {
+        alert('请输入品牌名称');
+        return;
+    }
+
+    try {
+        const response = await fetch('/api/geo/competitor-brands', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                project_id: currentProjectId,
+                brand_name: name,
+                brand_alias: document.getElementById('newCompetitorBrandAlias').value,
+                industry: document.getElementById('newCompetitorBrandIndustry').value,
+                notes: document.getElementById('newCompetitorBrandNotes').value
+            })
+        });
+        const data = await response.json();
+        if (data.success) {
+            closeAddCompetitorBrandModal();
+            loadCompetitorBrands();
+            alert('添加成功！');
+        } else {
+            alert('添加失败: ' + data.error);
+        }
+    } catch (error) {
+        console.error('添加失败:', error);
+        alert('添加失败');
+    }
+}
+
+// ========== 内容类型切换 ==========
+
+function onContentTypeChange() {
+    const type = document.getElementById('geoContentType').value;
+    document.getElementById('rankingBrandsGroup').style.display = (type === 'ranking') ? 'block' : 'none';
+}
+
+// ========== 排行文竞品选择器 ==========
+
+function openRankingBrandSelector() {
+    if (!competitorBrands || competitorBrands.length === 0) {
+        loadCompetitorBrands().then(() => renderRankingBrandSelector());
+    } else {
+        renderRankingBrandSelector();
+    }
+    document.getElementById('rankingBrandSelectorModal').style.display = 'flex';
+}
+
+function closeRankingBrandSelector() {
+    document.getElementById('rankingBrandSelectorModal').style.display = 'none';
+}
+
+function renderRankingBrandSelector() {
+    const container = document.getElementById('rankingBrandSelectorList');
+    if (!competitorBrands || competitorBrands.length === 0) {
+        container.innerHTML = `
+            <div style="text-align: center; padding: 30px; color: #9ca3af;">
+                <div style="font-size: 2em; margin-bottom: 8px;">⚔️</div>
+                <p>还没有添加竞品品牌</p>
+                <p style="font-size: 0.85em;">请先去文档库的「竞品资料」分类添加品牌</p>
+            </div>
+        `;
+        return;
+    }
+
+    container.innerHTML = competitorBrands.map(b => `
+        <label style="display: flex; align-items: center; padding: 10px 12px; border: 1px solid #e5e7eb; border-radius: 8px; margin-bottom: 8px; cursor: pointer;">
+            <input type="checkbox" value="${b.id}" class="ranking-brand-checkbox"
+                   ${rankingSelectedBrands.find(x => x.id === b.id) ? 'checked' : ''}
+                   style="margin-right: 10px;">
+            <span style="flex: 1; font-weight: 500;">${escapeHtml(b.brand_name)}</span>
+            ${b.industry ? `<span style="font-size: 0.8em; color: #9ca3af;">${escapeHtml(b.industry)}</span>` : ''}
+        </label>
+    `).join('');
+}
+
+function confirmRankingBrands() {
+    const checkboxes = document.querySelectorAll('.ranking-brand-checkbox:checked');
+    const selectedIds = Array.from(checkboxes).map(c => parseInt(c.value));
+
+    if (selectedIds.length < 2) {
+        alert('请至少选择 2 个竞品品牌');
+        return;
+    }
+    if (selectedIds.length > 5) {
+        alert('最多选择 5 个竞品品牌');
+        return;
+    }
+
+    rankingSelectedBrands = competitorBrands.filter(b => selectedIds.includes(b.id));
+    renderRankingBrandList();
+    closeRankingBrandSelector();
+}
+
+function renderRankingBrandList() {
+    const container = document.getElementById('rankingBrandList');
+    if (!rankingSelectedBrands || rankingSelectedBrands.length === 0) {
+        container.innerHTML = `
+            <div style="padding: 8px 12px; background: #f0f9ff; border-radius: 6px; color: #0369a1; font-size: 0.9em;">
+                还没有添加竞品品牌，点击下方按钮从竞品资料中选择
+            </div>
+        `;
+        return;
+    }
+
+    // 主品牌 + 选中的竞品
+    const mainBrand = document.getElementById('geoContentBrand').value || '主品牌';
+    const allBrands = [
+        { name: mainBrand, isMain: true },
+        ...rankingSelectedBrands.map(b => ({ ...b, isMain: false }))
+    ];
+
+    container.innerHTML = allBrands.map((b, idx) => `
+        <div style="display: flex; align-items: center; padding: 8px 12px; background: ${idx === 0 ? '#fef3c7' : '#f9fafb'}; border-radius: 6px; margin-bottom: 6px;">
+            <span style="width: 24px; height: 24px; background: ${idx === 0 ? '#f59e0b' : '#9ca3af'}; color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.8em; font-weight: bold; margin-right: 10px;">
+                ${idx + 1}
+            </span>
+            <span style="flex: 1; font-weight: 500;">${escapeHtml(b.name || b.brand_name)}</span>
+            ${b.isMain ? '<span style="font-size: 0.75em; color: #d97706; background: #fef3c7; padding: 2px 8px; border-radius: 10px;">主品牌</span>' :
+              `<button class="btn-small btn-danger geo-tab danger" style="padding: 2px 8px; font-size: 0.75em;" onclick="removeRankingBrand(${b.id})">移除</button>`}
+        </div>
+    `).join('');
+}
+
+function removeRankingBrand(brandId) {
+    rankingSelectedBrands = rankingSelectedBrands.filter(b => b.id !== brandId);
+    renderRankingBrandList();
 }
 
 function openViewDocumentModal(docId, filename) {
@@ -2653,18 +3151,20 @@ async function generateGEOContent() {
     const originalText = btn.textContent;
 
     if (!question) {
-        alert('请输入或选择问题');
+        alert('请输入文章主题');
         return;
     }
 
-    // 如果是横向对比文，检查对比品牌
-    let competitorBrands = [];
-    if (contentType === 'comparison') {
-        competitorBrands = getComparisonBrands();
-        if (competitorBrands.length === 0) {
-            alert('请至少添加1个对比品牌');
+    // 如果是排行对比文，检查竞品品牌
+    let competitorBrandIds = [];
+    let competitorBrandNames = [];
+    if (contentType === 'ranking') {
+        if (rankingSelectedBrands.length < 2) {
+            alert('请至少选择 2 个竞品品牌参与排行');
             return;
         }
+        competitorBrandIds = rankingSelectedBrands.map(b => b.id);
+        competitorBrandNames = rankingSelectedBrands.map(b => b.brand_name);
     }
 
     try {
@@ -2678,9 +3178,10 @@ async function generateGEOContent() {
             brand_name: brandName
         };
 
-        // 如果是横向对比文，添加对比品牌
-        if (contentType === 'comparison') {
-            requestBody.competitor_brands = competitorBrands;
+        // 如果是排行对比文，传递竞品品牌信息
+        if (contentType === 'ranking') {
+            requestBody.competitor_brand_ids = competitorBrandIds;
+            requestBody.competitor_brands = competitorBrandNames;
         }
 
         const response = await fetch('/api/geo/content/generate', {
@@ -2699,6 +3200,23 @@ async function generateGEOContent() {
                 btn.textContent = originalText;
                 btn.disabled = false;
             }, 1500);
+
+            // 自动展示质量评分
+            if (data.quality_score) {
+                const scoreResult = document.getElementById('geoScoreResult');
+                renderQualityScoreResult(data.quality_score, scoreResult);
+            }
+
+            // 自动展示合规检测结果
+            if (data.compliance) {
+                const compResult = document.getElementById('complianceResult');
+                renderComplianceResult(data.compliance, compResult);
+            }
+
+            // 展示迭代信息
+            if (data.iterations && data.iterations > 1) {
+                console.log(`生成迭代了 ${data.iterations} 轮，提升 ${data.improvement} 分`);
+            }
         }
     } catch (error) {
         console.error('生成失败:', error);
@@ -2851,7 +3369,7 @@ async function scoreGeoContent() {
     }
 
     const resultDiv = document.getElementById('geoScoreResult');
-    resultDiv.innerHTML = '<div style="color:#667eea">⏳ 正在评分...</div>';
+    resultDiv.innerHTML = '<div style="color:#2563eb">⏳ 正在评分...</div>';
 
     try {
         const response = await fetch('/api/geo/content/score', {
@@ -2861,58 +3379,7 @@ async function scoreGeoContent() {
         });
         const data = await response.json();
         if (data.success) {
-            const result = data.result;
-            const gradeColor = getGradeColor(result.grade);
-
-            let dimensionsHtml = '';
-            for (const [key, dim] of Object.entries(result.dimensions)) {
-                const dimColor = dim.score >= 80 ? '#22c55e' : dim.score >= 60 ? '#f59e0b' : '#ef4444';
-                dimensionsHtml += `
-                    <div style="margin-bottom:10px;">
-                        <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
-                            <span style="color:#444;">${dim.name}</span>
-                            <span style="color:${dimColor};font-weight:bold;">${dim.score}分</span>
-                        </div>
-                        <div style="background:#e5e7eb;height:8px;border-radius:4px;overflow:hidden;">
-                            <div style="background:${dimColor};height:100%;width:${dim.score}%;border-radius:4px;"></div>
-                        </div>
-                    </div>
-                `;
-            }
-
-            let feedbackHtml = '';
-            if (result.all_feedback && result.all_feedback.length > 0) {
-                feedbackHtml = `
-                    <div style="margin-top:16px;">
-                        <h4 style="margin-bottom:8px;color:#444;">💡 优化建议</h4>
-                        <ul style="margin:0;padding-left:20px;color:#666;">
-                            ${result.all_feedback.map(f => `<li style="margin-bottom:4px;">${escapeHtml(f)}</li>`).join('')}
-                        </ul>
-                    </div>
-                `;
-            }
-
-            resultDiv.innerHTML = `
-                <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:16px;">
-                    <div style="display:flex;align-items:center;gap:16px;margin-bottom:16px;">
-                        <div style="width:80px;height:80px;border-radius:50%;background:${gradeColor};display:flex;flex-direction:column;align-items:center;justify-content:center;color:white;">
-                            <span style="font-size:24px;font-weight:bold;">${result.overall_score}</span>
-                            <span style="font-size:14px;">等级 ${result.grade}</span>
-                        </div>
-                        <div>
-                            <div style="font-size:18px;font-weight:bold;color:#333;margin-bottom:4px;">
-                                ${result.passed ? '✅ 内容质量良好' : '⚠️ 需要优化'}
-                            </div>
-                            <div style="color:#666;">${result.summary}</div>
-                        </div>
-                    </div>
-                    <div style="border-top:1px solid #e2e8f0;padding-top:16px;">
-                        <h4 style="margin-bottom:12px;color:#444;">📊 各维度评分</h4>
-                        ${dimensionsHtml}
-                    </div>
-                    ${feedbackHtml}
-                </div>
-            `;
+            renderQualityScoreResult(data.result, resultDiv);
         }
     } catch (error) {
         resultDiv.innerHTML = `<div style="color:#ef4444;">❌ 评分失败: ${escapeHtml(error.message)}</div>`;
@@ -2920,15 +3387,244 @@ async function scoreGeoContent() {
     }
 }
 
+function renderQualityScoreResult(result, container) {
+    const gradeColor = getGradeColor(result.grade);
+
+    let dimensionsHtml = '';
+    for (const [key, dim] of Object.entries(result.dimensions)) {
+        const dimColor = dim.score >= 80 ? '#22c55e' : dim.score >= 60 ? '#f59e0b' : '#ef4444';
+        dimensionsHtml += `
+            <div style="margin-bottom:10px;">
+                <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
+                    <span style="color:#444;">${dim.name}</span>
+                    <span style="color:${dimColor};font-weight:bold;">${dim.score}分</span>
+                </div>
+                <div style="background:#e5e7eb;height:8px;border-radius:4px;overflow:hidden;">
+                    <div style="background:${dimColor};height:100%;width:${dim.score}%;border-radius:4px;"></div>
+                </div>
+            </div>
+        `;
+    }
+
+    let feedbackHtml = '';
+    if (result.all_feedback && result.all_feedback.length > 0) {
+        feedbackHtml = `
+            <div style="margin-top:16px;">
+                <h4 style="margin-bottom:8px;color:#444;">💡 优化建议</h4>
+                <ul style="margin:0;padding-left:20px;color:#666;">
+                    ${result.all_feedback.map(f => `<li style="margin-bottom:4px;">${escapeHtml(f)}</li>`).join('')}
+                </ul>
+            </div>
+        `;
+    }
+
+    container.innerHTML = `
+        <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:16px;">
+            <div style="display:flex;align-items:center;gap:16px;margin-bottom:16px;">
+                <div style="width:80px;height:80px;border-radius:50%;background:${gradeColor};display:flex;flex-direction:column;align-items:center;justify-content:center;color:white;">
+                    <span style="font-size:24px;font-weight:bold;">${result.overall_score}</span>
+                    <span style="font-size:14px;">等级 ${result.grade}</span>
+                </div>
+                <div>
+                    <div style="font-size:18px;font-weight:bold;color:#333;margin-bottom:4px;">
+                        ${result.passed ? '✅ 内容质量良好' : '⚠️ 需要优化'}
+                    </div>
+                    <div style="color:#666;">${result.summary}</div>
+                </div>
+            </div>
+            <div style="border-top:1px solid #e2e8f0;padding-top:16px;">
+                <h4 style="margin-bottom:12px;color:#444;">📊 各维度评分</h4>
+                ${dimensionsHtml}
+            </div>
+            ${feedbackHtml}
+        </div>
+    `;
+}
+
 function getGradeColor(grade) {
     const colors = {
         'S': '#22c55e',
-        'A': '#667eea',
+        'A': '#2563eb',
         'B': '#f59e0b',
         'C': '#f97316',
         'D': '#ef4444'
     };
     return colors[grade] || '#999';
+}
+
+// ========== 合规检测 ==========
+
+async function checkCompliance() {
+    const content = document.getElementById('geoContentPreview').value;
+    const brandName = document.getElementById('geoContentBrand').value;
+    const resultDiv = document.getElementById('complianceResult');
+
+    if (!content.trim()) {
+        alert('请先生成或输入内容');
+        return;
+    }
+
+    resultDiv.innerHTML = '<div style="color:#666;">⏳ 正在检测...</div>';
+
+    try {
+        const response = await fetch('/api/geo/content/check-compliance', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({content, brand_name: brandName})
+        });
+
+        const data = await response.json();
+        if (data.success) {
+            renderComplianceResult(data.result, resultDiv);
+        }
+    } catch (error) {
+        resultDiv.innerHTML = `<div style="color:#ef4444;">❌ 检测失败: ${escapeHtml(error.message)}</div>`;
+    }
+}
+
+async function autoSanitizeContent() {
+    const content = document.getElementById('geoContentPreview').value;
+    const brandName = document.getElementById('geoContentBrand').value;
+    const resultDiv = document.getElementById('complianceResult');
+
+    if (!content.trim()) {
+        alert('请先生成或输入内容');
+        return;
+    }
+
+    if (!confirm('确定要进行一键合规修正吗？\n修正后会替换当前内容，建议先备份。')) {
+        return;
+    }
+
+    resultDiv.innerHTML = '<div style="color:#666;">⏳ 正在修正...</div>';
+
+    try {
+        const response = await fetch('/api/geo/content/auto-sanitize', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                content,
+                brand_name: brandName,
+                level: 'moderate',
+                add_disclaimer: true
+            })
+        });
+
+        const data = await response.json();
+        if (data.success) {
+            // 替换内容
+            document.getElementById('geoContentPreview').value = data.content;
+
+            // 展示修正结果
+            const compAfter = data.compliance_after;
+            let changesHtml = '';
+            if (data.changes && data.changes.length > 0) {
+                changesHtml = `
+                    <div style="margin-top:12px;">
+                        <div style="font-weight:600;color:#0891b2;margin-bottom:8px;">🔄 修正记录（${data.changes.length} 处）</div>
+                        <ul style="margin:0;padding-left:20px;font-size:13px;color:#0e7490;line-height:1.8;">
+                            ${data.changes.map(c => `<li>${escapeHtml(c)}</li>`).join('')}
+                        </ul>
+                    </div>
+                `;
+            }
+
+            resultDiv.innerHTML = `
+                <div style="background:#f0fdf4;border:1px solid #86efac;border-radius:8px;padding:16px;">
+                    <div style="font-weight:600;color:#15803d;font-size:16px;margin-bottom:8px;">
+                        ✅ 修正完成
+                    </div>
+                    <div style="color:#166534;margin-bottom:8px;">
+                        修正后风险分：<strong>${compAfter.risk_score}</strong> / 100（${compAfter.risk_level_name}）
+                    </div>
+                    <div style="color:#166534;font-size:13px;">${compAfter.summary}</div>
+                    ${changesHtml}
+                </div>
+            `;
+        }
+    } catch (error) {
+        resultDiv.innerHTML = `<div style="color:#ef4444;">❌ 修正失败: ${escapeHtml(error.message)}</div>`;
+    }
+}
+
+function renderComplianceResult(result, container) {
+    const levelColors = {
+        'safe': {bg: '#f0fdf4', border: '#86efac', text: '#15803d', icon: '✅'},
+        'low': {bg: '#fefce8', border: '#fde047', text: '#854d0e', icon: '⚠️'},
+        'medium': {bg: '#fff7ed', border: '#fdba74', text: '#c2410c', icon: '⚡'},
+        'high': {bg: '#fef2f2', border: '#fca5a5', text: '#b91c1c', icon: '🔴'},
+        'critical': {bg: '#fef2f2', border: '#f87171', text: '#991b1b', icon: '💀'}
+    };
+
+    const color = levelColors[result.risk_level] || levelColors['low'];
+
+    // 问题列表
+    let issuesHtml = '';
+    if (result.issues && result.issues.length > 0) {
+        issuesHtml = `
+            <div style="margin-top:14px;border-top:1px solid ${color.border};padding-top:12px;">
+                <div style="font-weight:600;color:${color.text};margin-bottom:10px;">
+                    🔍 检测出的问题（${result.issue_count} 项，其中严重 ${result.high_risk_count} 项）
+                </div>
+                <div style="display:flex;flex-direction:column;gap:10px;">
+                    ${result.issues.map(issue => {
+                        const sevColors = {
+                            'low': '#84cc16',
+                            'medium': '#f59e0b',
+                            'high': '#ef4444',
+                            'critical': '#dc2626'
+                        };
+                        const sevColor = sevColors[issue.severity] || '#999';
+                        return `
+                            <div style="background:white;border:1px solid #e5e7eb;border-radius:6px;padding:10px 12px;">
+                                <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+                                    <span style="display:inline-block;padding:2px 8px;border-radius:4px;background:${sevColor}22;color:${sevColor};font-size:12px;font-weight:500;">${issue.severity_name}</span>
+                                    <span style="font-weight:600;color:#374151;font-size:13px;">${escapeHtml(issue.category)}</span>
+                                </div>
+                                <div style="font-size:13px;color:#4b5563;margin-bottom:4px;">${escapeHtml(issue.description)}</div>
+                                <div style="font-size:12px;color:#6b7280;font-family:monospace;background:#f9fafb;padding:4px 8px;border-radius:4px;margin-bottom:4px;">匹配：${escapeHtml(issue.matched_text)}</div>
+                                <div style="font-size:12px;color:#0891b2;">💡 ${escapeHtml(issue.suggestion)}</div>
+                            </div>
+                        `;
+                    }).join('')}
+                </div>
+            </div>
+        `;
+    }
+
+    // 免责声明建议
+    let disclaimerHtml = '';
+    if (result.disclaimer) {
+        disclaimerHtml = `
+            <div style="margin-top:12px;padding:10px 12px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;">
+                <div style="font-weight:600;color:#1d4ed8;font-size:13px;margin-bottom:6px;">📝 建议追加免责声明</div>
+                <div style="font-size:12px;color:#1e40af;line-height:1.6;white-space:pre-wrap;">${escapeHtml(result.disclaimer)}</div>
+            </div>
+        `;
+    }
+
+    container.innerHTML = `
+        <div style="background:${color.bg};border:1px solid ${color.border};border-radius:8px;padding:16px;">
+            <div style="display:flex;align-items:center;gap:16px;">
+                <div style="width:70px;height:70px;border-radius:50%;background:${color.text};display:flex;flex-direction:column;align-items:center;justify-content:center;color:white;">
+                    <span style="font-size:22px;font-weight:bold;">${result.risk_score}</span>
+                    <span style="font-size:11px;">风险分</span>
+                </div>
+                <div style="flex:1;">
+                    <div style="font-size:17px;font-weight:bold;color:${color.text};margin-bottom:4px;">
+                        ${color.icon} ${result.risk_level_name}
+                    </div>
+                    <div style="color:${color.text};font-size:13px;line-height:1.5;">${escapeHtml(result.summary)}</div>
+                </div>
+            </div>
+            ${issuesHtml}
+            ${disclaimerHtml}
+            ${result.passed ?
+                '<div style="margin-top:12px;padding:8px 12px;background:#dcfce7;border-radius:6px;color:#15803d;font-size:13px;">✅ 合规检测通过</div>' :
+                '<div style="margin-top:12px;padding:8px 12px;background:#fee2e2;border-radius:6px;color:#b91c1c;font-size:13px;">❌ 未通过合规检测，建议修改后再发布</div>'
+            }
+        </div>
+    `;
 }
 
 // ========== 竞品分析 ==========
@@ -2959,7 +3655,7 @@ function renderCompetitors(competitors) {
             <div class="geo-list-header">
                 <span class="geo-list-title">${escapeHtml(comp.name)}</span>
             </div>
-            ${comp.url ? `<a href="${escapeHtml(comp.url)}" target="_blank" style="color:#667eea;text-decoration:none">${escapeHtml(comp.url)}</a>` : ''}
+            ${comp.url ? `<a href="${escapeHtml(comp.url)}" target="_blank" style="color:#2563eb;text-decoration:none">${escapeHtml(comp.url)}</a>` : ''}
             ${comp.notes ? `<div style="margin-top:6px;color:#666">${escapeHtml(comp.notes)}</div>` : ''}
             <div class="geo-list-actions">
                 <button class="btn-delete" onclick="deleteCompetitor(${comp.id})">🗑️ 删除</button>
@@ -3000,6 +3696,9 @@ async function loadDoubaoCitations(resetPage = true) {
     if (resetPage) {
         citationCurrentPage = 1;
     }
+
+    // 加载统计数据
+    loadCitationStats();
 
     const container = document.getElementById('doubaoCitationList');
     const paginationContainer = document.getElementById('doubaoCitationPagination');
@@ -3190,12 +3889,68 @@ async function importCitationToDocs(url, title) {
 
         const data = await response.json();
         if (data.success) {
-            alert(`✅ 导入成功！\n\n已保存到文档库。\n\n内容预览: ${data.content_preview || ''}`);
+            alert(`✅ 导入成功！\n\n已保存到文档库（参考文章分类）。\n\n内容预览: ${data.content_preview || ''}`);
+            loadCitationStats();
         } else {
             alert(`❌ 导入失败: ${data.error || '未知错误'}`);
         }
     } catch (error) {
         alert(`❌ 导入失败: ${error.message}`);
+    }
+}
+
+async function loadCitationStats() {
+    if (!currentProjectId) return;
+    try {
+        const response = await fetch(`/api/geo/doubao-citations/${currentProjectId}/stats`);
+        const data = await response.json();
+        if (data.success) {
+            const el = document.getElementById('citationStats');
+            if (el) {
+                el.innerHTML = `共 <strong>${data.total}</strong> 条 | 已导入 <strong>${data.imported}</strong> | 未导入 <strong>${data.unimported}</strong>`;
+            }
+        }
+    } catch (error) {
+        console.error('加载统计失败:', error);
+    }
+}
+
+async function cleanupCitations() {
+    if (!currentProjectId) return;
+
+    const keepCountStr = prompt('保留最新的多少条记录？（已导入的会保留）', '100');
+    if (keepCountStr === null) return;
+
+    const keepCount = parseInt(keepCountStr);
+    if (isNaN(keepCount) || keepCount < 10) {
+        alert('请输入有效的数字（至少10条）');
+        return;
+    }
+
+    if (!confirm(`确定要清理吗？\n将只保留最新的 ${keepCount} 条记录，已导入的链接会保留。\n\n此操作不可撤销！`)) {
+        return;
+    }
+
+    try {
+        const response = await fetch(`/api/geo/doubao-citations/${currentProjectId}/cleanup`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                keep_count: keepCount,
+                keep_imported: true
+            })
+        });
+
+        const data = await response.json();
+        if (data.success) {
+            alert(`✅ 清理完成！\n删除了 ${data.deleted} 条，剩余 ${data.remaining} 条`);
+            loadDoubaoCitations();
+            loadCitationStats();
+        } else {
+            alert(`❌ 清理失败: ${data.error || '未知错误'}`);
+        }
+    } catch (error) {
+        alert(`❌ 清理失败: ${error.message}`);
     }
 }
 
@@ -3208,7 +3963,7 @@ async function analyzeDoubaoCitations() {
         return;
     }
 
-    resultDiv.innerHTML = '<div style="color:#667eea">⏳ 正在分析...</div>';
+    resultDiv.innerHTML = '<div style="color:#2563eb">⏳ 正在分析...</div>';
 
     try {
         const response = await fetch('/api/geo/citations/analyze', {

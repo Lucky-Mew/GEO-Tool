@@ -1284,81 +1284,181 @@ def api_geo_check_content():
 
 @app.route('/api/geo/content/generate', methods=['POST'])
 def api_geo_generate_content():
-    """生成内容"""
-    from src.geo import ContentTemplate
-    from src.geo import DocumentProcessor
-    from src.geo import RetrievalEngine
+    """生成内容（升级版：质量自循环 + 合规审核）
+
+    内容类型：
+    - deep_analysis: 深度分析文（行业科普/深度解读风格）
+    - ranking: 排行对比文（多品牌横向对比/排行榜）
+    """
+    from src.geo import generate_content
     from src.config import load_config
     from src.collector.monitor_analysis import _call_llm
 
     data = request.json
-    content_type = data.get('type', 'longtail')
+    content_type = data.get('type', 'deep_analysis')
     question = data.get('question', '')
     brand_name = data.get('brand_name', '')
     project_id = data.get('project_id')
-    # 获取对比品牌列表（仅横向对比文使用）
     competitor_brands = data.get('competitor_brands', [])
+    competitor_brand_ids = data.get('competitor_brand_ids', [])
 
-    # 1. 检索相关素材
-    materials = []
-    context_text = ''
-    if project_id:
-        dp = DocumentProcessor()
-        re = RetrievalEngine()
-        chunks = dp.get_all_chunks_for_project(project_id)
-        if chunks:
-            # 获取摘要一起检索
-            summaries = dp.get_summaries(project_id)
-            # 构建索引并检索
-            re.index_chunks(chunks)
-            results = re.search(question, top_k=5, summaries=summaries)
-            if results:
-                materials = [{'source': r.get('source', ''), 'content': r.get('content', '')} for r in results]
-                context_text = '\n\n'.join([r.get('content', '') for r in results])
+    # 生成参数（可通过请求参数覆盖默认值）
+    min_quality_score = data.get('min_quality_score', 70)
+    max_iterations = data.get('max_iterations', 2)
+    compliance_threshold = data.get('compliance_threshold', 40)
 
-    # 2. 调用LLM生成完整内容
     config = load_config()
-    if content_type == 'longtail':
-        content = ContentTemplate.longtail_question_template_llm(
-            question,
-            context_text,
-            materials,
-            brand_name,
-            config,
-            _call_llm
-        )
-    elif content_type == 'comparison':
-        content = ContentTemplate.comparison_template_llm(
-            question,
-            context_text,
-            brand_name,
-            competitor_brands,  # 新增对比品牌
-            config,
-            _call_llm
-        )
-    else:
-        content = ContentTemplate.core_deep_template_llm(
-            question,
-            context_text,
-            brand_name,
-            config,
-            _call_llm
+
+    try:
+        result = generate_content(
+            content_type=content_type,
+            question=question,
+            config=config,
+            llm_func=_call_llm,
+            project_id=project_id,
+            brand_name=brand_name,
+            competitor_brands=competitor_brands,
+            competitor_brand_ids=competitor_brand_ids,
+            min_quality_score=min_quality_score,
+            max_iterations=max_iterations,
+            compliance_threshold=compliance_threshold
         )
 
-    return jsonify({'success': True, 'content': content})
+        return jsonify({
+            'success': True,
+            'content': result['content'],
+            'quality_score': result['quality_score'],
+            'compliance': result['compliance'],
+            'iterations': result['iterations'],
+            'improvement': result['improvement'],
+            'generation_log': result['generation_log'],
+            'warnings': result['warnings']
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+
+@app.route('/api/geo/content/check-compliance', methods=['POST'])
+def api_geo_check_compliance():
+    """单独的合规检测接口（通用版）"""
+    from src.geo import check_compliance
+
+    data = request.json
+    content = data.get('content', '')
+    brand_name = data.get('brand_name', '')
+
+    result = check_compliance(content, brand_name)
+    return jsonify({'success': True, 'result': result})
+
+
+@app.route('/api/geo/content/auto-sanitize', methods=['POST'])
+def api_geo_auto_sanitize():
+    """自动修正合规问题（通用版，关键词替换式轻量修正）"""
+    from src.geo import auto_sanitize_content, check_compliance, add_disclaimer
+
+    data = request.json
+    content = data.get('content', '')
+    level = data.get('level', 'moderate')
+    brand_name = data.get('brand_name', '')
+    add_disc = data.get('add_disclaimer', True)
+
+    # 自动修正（关键词替换式）
+    sanitized, changes = auto_sanitize_content(content, level)
+
+    # 追加免责声明
+    if add_disc:
+        sanitized = add_disclaimer(sanitized)
+
+    # 重新检测
+    new_check = check_compliance(sanitized, brand_name)
+
+    return jsonify({
+        'success': True,
+        'content': sanitized,
+        'changes': changes,
+        'compliance_after': new_check
+    })
+
+
+# ========== 竞品品牌管理 API ==========
+
+@app.route('/api/geo/competitor-brands', methods=['GET'])
+def api_geo_get_competitor_brands():
+    """获取竞品品牌列表"""
+    from src.db.models import get_competitor_brands
+    project_id = request.args.get('project_id', type=int)
+    brands = get_competitor_brands(project_id)
+    return jsonify({'success': True, 'brands': brands})
+
+
+@app.route('/api/geo/competitor-brands', methods=['POST'])
+def api_geo_add_competitor_brand():
+    """添加竞品品牌"""
+    from src.db.models import add_competitor_brand
+    data = request.json
+    project_id = data.get('project_id')
+    brand_name = data.get('brand_name', '').strip()
+    brand_alias = data.get('brand_alias', '')
+    industry = data.get('industry', '')
+    notes = data.get('notes', '')
+
+    if not brand_name:
+        return jsonify({'success': False, 'error': '品牌名不能为空'}), 400
+
+    brand_id = add_competitor_brand(project_id, brand_name, brand_alias, industry, notes)
+    return jsonify({'success': True, 'id': brand_id})
+
+
+@app.route('/api/geo/competitor-brands/<int:brand_id>', methods=['PUT'])
+def api_geo_update_competitor_brand(brand_id):
+    """更新竞品品牌"""
+    from src.db.models import update_competitor_brand
+    data = request.json
+    update_competitor_brand(
+        brand_id,
+        brand_name=data.get('brand_name'),
+        brand_alias=data.get('brand_alias'),
+        industry=data.get('industry'),
+        notes=data.get('notes')
+    )
+    return jsonify({'success': True})
+
+
+@app.route('/api/geo/competitor-brands/<int:brand_id>', methods=['DELETE'])
+def api_geo_delete_competitor_brand(brand_id):
+    """删除竞品品牌"""
+    from src.db.models import delete_competitor_brand
+    delete_competitor_brand(brand_id)
+    return jsonify({'success': True})
 
 
 # ========== 文档管理 API ==========
 
 @app.route('/api/geo/documents', methods=['GET'])
 def api_geo_get_documents():
-    """获取文档列表"""
+    """获取文档列表
+
+    Query params:
+        project_id: 项目ID
+        category: 三大分类 brand / competitor / reference
+        competitor_brand_id: 竞品品牌ID（分类为 competitor 时可用）
+        tag: 标签筛选（细粒度）
+    """
     from src.geo import DocumentProcessor
     project_id = request.args.get('project_id', type=int)
+    category = request.args.get('category')  # brand / competitor / reference
+    competitor_brand_id = request.args.get('competitor_brand_id', type=int)
     tag = request.args.get('tag')
     dp = DocumentProcessor()
-    documents = dp.get_documents(project_id, tag=tag)
+
+    documents = dp.get_documents(
+        project_id,
+        category=category,
+        tag=tag,
+        competitor_brand_id=competitor_brand_id
+    )
     summaries = dp.get_summaries(project_id)
+
     return jsonify({'success': True, 'documents': documents, 'summaries': summaries})
 
 
@@ -1377,6 +1477,12 @@ def api_geo_upload_document():
 
     project_id = request.form.get('project_id', type=int)
     tags = request.form.get('tags', '')
+    doc_category = request.form.get('category', 'brand')  # brand / competitor / reference
+    competitor_brand_id = request.form.get('competitor_brand_id', type=int)
+
+    # 校验：竞品资料必须有品牌ID
+    if doc_category == 'competitor' and not competitor_brand_id:
+        return jsonify({'success': False, 'error': '竞品资料必须选择所属竞品品牌'}), 400
 
     dp = DocumentProcessor()
     file_type = dp.detect_file_type(file.filename)
@@ -1400,7 +1506,9 @@ def api_geo_upload_document():
         storage_path=str(storage_path),
         file_type=file_type,
         file_size=file_size,
-        tags=tags
+        tags=tags,
+        doc_category=doc_category,
+        competitor_brand_id=competitor_brand_id
     )
 
     # 解析文档
@@ -1531,6 +1639,93 @@ def api_geo_generate_doc_summary(doc_id):
         return jsonify({'success': True, 'title': title, 'content': summary})
     except Exception as e:
         return jsonify({'success': False, 'error': f'生成摘要失败：{str(e)}'}), 500
+
+
+@app.route('/api/geo/documents/manual', methods=['POST'])
+def api_geo_create_manual_document():
+    """手动创建文档（不通过文件上传）"""
+    from src.geo import DocumentProcessor
+
+    data = request.json or {}
+    project_id = data.get('project_id')
+    title = (data.get('title') or '').strip()
+    content = (data.get('content') or '').strip()
+    tags = data.get('tags', '')
+    doc_category = data.get('category', 'brand')
+    competitor_brand_id = data.get('competitor_brand_id')
+
+    if not title:
+        return jsonify({'success': False, 'error': '请输入文档标题'}), 400
+    if not content:
+        return jsonify({'success': False, 'error': '请输入文档内容'}), 400
+
+    # 校验：竞品资料必须有品牌ID
+    if doc_category == 'competitor' and not competitor_brand_id:
+        return jsonify({'success': False, 'error': '竞品资料必须选择所属竞品品牌'}), 400
+
+    dp = DocumentProcessor()
+
+    try:
+        doc_id = dp.save_manual_document(
+            project_id=project_id,
+            title=title,
+            content=content,
+            tags=tags,
+            doc_category=doc_category,
+            competitor_brand_id=competitor_brand_id
+        )
+
+        # 切分 chunks
+        chunks = dp.split_into_chunks(content)
+        dp.save_chunks(doc_id, chunks)
+
+        return jsonify({'success': True, 'id': doc_id, 'word_count': len(content), 'chunks': len(chunks)})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/geo/documents/<int:doc_id>', methods=['PUT'])
+def api_geo_update_document(doc_id):
+    """更新文档（元信息 + 内容）"""
+    from src.geo import DocumentProcessor
+
+    dp = DocumentProcessor()
+    doc = dp.get_document(doc_id)
+    if not doc:
+        return jsonify({'success': False, 'error': '文档不存在'}), 404
+
+    data = request.json or {}
+    title = data.get('title')
+    tags = data.get('tags')
+    doc_category = data.get('category')
+    competitor_brand_id = data.get('competitor_brand_id')
+    content = data.get('content')
+
+    try:
+        # 更新元信息
+        has_meta = any(v is not None for v in [title, tags, doc_category, competitor_brand_id])
+        if has_meta:
+            dp.update_document_meta(
+                doc_id=doc_id,
+                title=title,
+                tags=tags,
+                doc_category=doc_category,
+                competitor_brand_id=competitor_brand_id
+            )
+
+        # 更新正文内容
+        if content is not None:
+            content = content.strip()
+            if not content:
+                return jsonify({'success': False, 'error': '文档内容不能为空'}), 400
+            dp.update_document_content(doc_id, content)
+
+        updated = dp.get_document(doc_id)
+        # 兼容字段名
+        updated['tags'] = updated.get('category', '')
+        return jsonify({'success': True, 'document': updated})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 
 @app.route('/api/geo/documents/<int:doc_id>', methods=['DELETE'])
@@ -1746,16 +1941,106 @@ def api_geo_add_citation(comp_id):
 
 @app.route('/api/geo/content/score', methods=['POST'])
 def api_geo_content_score():
-    """对GEO内容进行质量评分"""
+    """对GEO内容进行质量评分（8维度专业版）"""
     data = request.json
     content = data.get('content', '')
     brand_name = data.get('brand_name')
+    content_type = data.get('content_type')  # longtail/comparison/deep
+    format_type = data.get('format', 'json')  # json/html/text
 
-    from src.geo.geo_quality_scorer import score_geo_content
+    from src.geo.geo_quality_scorer import score_geo_content, GEOQualityScorer
 
     try:
-        result = score_geo_content(content, brand_name)
+        result = score_geo_content(content, brand_name, content_type)
+
+        # 如果需要HTML报告
+        if format_type == 'html':
+            html_report = GEOQualityScorer.generate_html_report(result)
+            result['html_report'] = html_report
+        elif format_type == 'text':
+            text_report = GEOQualityScorer.generate_text_report(result)
+            result['text_report'] = text_report
+
         return jsonify({'success': True, 'result': result})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+
+@app.route('/api/geo/keywords/geo-value', methods=['POST'])
+def api_geo_keywords_geo_value():
+    """批量计算关键词的GEO价值评分"""
+    data = request.json
+    keywords = data.get('keywords', [])
+    brand_name = data.get('brand_name')
+
+    from src.geo import KeywordManager
+
+    try:
+        km = KeywordManager()
+        scored = km.batch_calculate_geo_value(keywords, brand_name)
+        return jsonify({'success': True, 'keywords': scored})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+
+@app.route('/api/geo/keywords/cluster', methods=['POST'])
+def api_geo_keywords_cluster():
+    """关键词主题聚类"""
+    data = request.json
+    keywords = data.get('keywords', [])
+
+    from src.geo import KeywordManager
+
+    try:
+        km = KeywordManager()
+        clusters = km.cluster_keywords(keywords)
+        return jsonify({'success': True, 'clusters': clusters})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+
+@app.route('/api/geo/keywords/generate-by-intent', methods=['POST'])
+def api_geo_keywords_generate_by_intent():
+    """基于用户决策路径生成5类意图关键词"""
+    data = request.json
+    brand_name = data.get('brand_name', '')
+    core_product = data.get('core_product')
+    competitors = data.get('competitors', [])
+
+    from src.geo import KeywordManager
+
+    try:
+        km = KeywordManager()
+        result = km.generate_keywords_by_intent(brand_name, core_product, competitors)
+        return jsonify({'success': True, 'intent_keywords': result})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+
+@app.route('/api/geo/knowledge-base', methods=['GET'])
+def api_geo_knowledge_base():
+    """获取GEO知识库信息"""
+    from src.geo import GEOKnowledgeBase
+
+    try:
+        content_type = request.args.get('content_type')
+        if content_type:
+            guide = GEOKnowledgeBase.get_writing_guide(content_type)
+            return jsonify({'success': True, 'writing_guide': guide})
+
+        # 返回核心方法论摘要
+        core_methods = GEOKnowledgeBase.get_all_core_methods()
+        quality_dims = GEOKnowledgeBase.get_quality_dimensions()
+        keyword_strategy = GEOKnowledgeBase.get_keyword_strategy()
+        checklist = GEOKnowledgeBase.LANDING_CHECKLIST
+
+        return jsonify({
+            'success': True,
+            'core_methods': core_methods,
+            'quality_dimensions': quality_dims,
+            'keyword_strategy': keyword_strategy,
+            'landing_checklist': checklist
+        })
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
 
@@ -1820,7 +2105,7 @@ def api_geo_citation_import():
         if not content or len(content.strip()) < 50:
             return jsonify({'success': False, 'error': '抓取内容太少，请稍后再试'})
 
-        # 保存到文档库
+        # 保存到文档库（打"参考文章"标签，用于生成时学习写作风格）
         dp = DocumentProcessor()
         doc_id = dp.save_document(
             project_id=project_id,
@@ -1828,7 +2113,8 @@ def api_geo_citation_import():
             storage_path=url,
             file_type='url',
             file_size=len(content),
-            tags="豆包引用,竞品资料"
+            tags="参考文章,豆包引用",
+            doc_category='reference'
         )
 
         # 解析文档内容
@@ -1846,6 +2132,41 @@ def api_geo_citation_import():
 
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
+
+
+@app.route('/api/geo/doubao-citations/<int:project_id>/cleanup', methods=['POST'])
+def api_geo_cleanup_citations(project_id):
+    """清理旧的豆包引用记录"""
+    try:
+        data = request.get_json() or {}
+        keep_count = data.get('keep_count', 100)
+        keep_imported = data.get('keep_imported', True)
+
+        result = models.cleanup_doubao_citations(
+            project_id,
+            keep_count=keep_count,
+            keep_imported=keep_imported
+        )
+        return jsonify({'success': True, **result})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/geo/doubao-citations/<int:project_id>/stats', methods=['GET'])
+def api_geo_citation_stats(project_id):
+    """获取豆包引用统计数据"""
+    try:
+        total = models.get_doubao_citations_count(project_id)
+        imported = models.get_doubao_citations_count(project_id, import_filter='imported')
+        unimported = models.get_doubao_citations_count(project_id, import_filter='unimported')
+        return jsonify({
+            'success': True,
+            'total': total,
+            'imported': imported,
+            'unimported': unimported
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 
 @app.route('/api/geo/doubao-citations/<int:project_id>', methods=['GET'])
@@ -1892,7 +2213,7 @@ def api_geo_import_citation(project_id, citation_id):
         if not content or len(content.strip()) < 50:
             return jsonify({'success': False, 'error': '抓取内容太少，请稍后再试'})
 
-        # 保存到文档库
+        # 保存到文档库（打"参考文章"标签，用于生成时学习写作风格）
         dp = DocumentProcessor()
         doc_id = dp.save_document(
             project_id=project_id,
@@ -1900,7 +2221,8 @@ def api_geo_import_citation(project_id, citation_id):
             storage_path=url,
             file_type='url',
             file_size=len(content),
-            tags='豆包引用,竞品资料'
+            tags='参考文章,豆包引用',
+            doc_category='reference'
         )
 
         # 解析文档内容
@@ -1971,6 +2293,185 @@ def simple_fetch_url(url):
     except Exception as e:
         print(f"抓取失败: {e}")
         return '', ''
+
+
+# ========== 每日文章规划页面 ==========
+
+@app.route('/geo/daily-plan')
+def geo_daily_plan_page():
+    """每日文章规划首页"""
+    from flask import render_template, request
+    from src.geo import DailyPlanManager
+
+    project_id = request.args.get('project_id', type=int)
+    dpm = DailyPlanManager()
+
+    active_plan = dpm.get_active_plan(project_id)
+
+    if active_plan:
+        # 有活跃规划，显示详情页
+        plan_data = dpm.get_plan_with_articles(active_plan['id'])
+        return render_template('geo_daily_plan.html',
+                               plan=plan_data['plan'],
+                               articles=plan_data['articles'],
+                               progress=plan_data['progress'],
+                               type_names=dpm.TYPE_NAMES,
+                               project_id=project_id)
+    else:
+        # 无活跃规划，显示创建页
+        all_plans = dpm.get_all_plans(project_id)
+        templates = dpm.get_template_options()
+        return render_template('geo_daily_plan_create.html',
+                               plans=all_plans,
+                               templates=templates,
+                               project_id=project_id)
+
+
+@app.route('/geo/daily-plan/<int:plan_id>/view')
+def geo_daily_plan_view(plan_id):
+    """查看历史规划详情"""
+    from flask import render_template, request
+    from src.geo import DailyPlanManager
+
+    project_id = request.args.get('project_id', type=int)
+    dpm = DailyPlanManager()
+
+    plan_data = dpm.get_plan_with_articles(plan_id)
+    if not plan_data:
+        return "规划不存在", 404
+
+    return render_template('geo_daily_plan.html',
+                           plan=plan_data['plan'],
+                           articles=plan_data['articles'],
+                           progress=plan_data['progress'],
+                           type_names=dpm.TYPE_NAMES,
+                           project_id=project_id,
+                           is_readonly=True)
+
+
+# ========== 每日文章规划 API ==========
+
+@app.route('/api/geo/daily-plan/create', methods=['POST'])
+def api_geo_create_daily_plan():
+    """创建新规划"""
+    try:
+        from src.geo import DailyPlanManager
+
+        data = request.get_json()
+        project_id = data.get('project_id')
+        plan_name = data.get('plan_name', 'GEO内容规划')
+        start_date = data.get('start_date')
+        total_days = data.get('total_days', 7)
+        template_type = data.get('template_type', 'balanced')
+
+        dpm = DailyPlanManager()
+        plan_id = dpm.create_plan(
+            project_id=project_id,
+            plan_name=plan_name,
+            start_date=start_date,
+            total_days=total_days,
+            template_type=template_type
+        )
+
+        return jsonify({'success': True, 'plan_id': plan_id})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/geo/daily-plan/<int:article_id>/publish', methods=['POST'])
+def api_geo_publish_article(article_id):
+    """标记文章已发布"""
+    try:
+        from src.geo import DailyPlanManager
+
+        data = request.get_json()
+        status = data.get('status', 'published')
+        published_url = data.get('published_url')
+        published_date = data.get('published_date')
+
+        dpm = DailyPlanManager()
+        dpm.update_article_status(
+            article_id=article_id,
+            status=status,
+            published_url=published_url,
+            published_date=published_date
+        )
+
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/geo/daily-plan/<int:article_id>/content', methods=['POST'])
+def api_geo_update_article_content(article_id):
+    """保存文章内容"""
+    try:
+        from src.geo import DailyPlanManager
+
+        data = request.get_json()
+
+        dpm = DailyPlanManager()
+        dpm.update_article_content(
+            article_id=article_id,
+            title=data.get('title'),
+            target_keywords=data.get('target_keywords'),
+            content_outline=data.get('content_outline'),
+            content_text=data.get('content_text'),
+            notes=data.get('notes')
+        )
+
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/geo/daily-plan/complete', methods=['POST'])
+def api_geo_complete_plan():
+    """结束规划"""
+    try:
+        from src.geo import DailyPlanManager
+
+        data = request.get_json()
+        plan_id = data.get('plan_id')
+
+        dpm = DailyPlanManager()
+        dpm.complete_plan(plan_id)
+
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/geo/daily-plan/<int:article_id>/generate', methods=['POST'])
+def api_geo_generate_article(article_id):
+    """AI生成文章内容"""
+    try:
+        from src.geo import DailyPlanManager
+        from src.collector.monitor_analysis import _call_llm
+
+        data = request.get_json()
+        project_id = data.get('project_id')
+        brand_name = data.get('brand_name')
+
+        dpm = DailyPlanManager()
+        config = load_config()
+
+        content = dpm.generate_article_content(
+            article_id=article_id,
+            project_id=project_id,
+            brand_name=brand_name,
+            config=config,
+            llm_func=_call_llm
+        )
+
+        if content:
+            # 保存生成的内容
+            dpm.update_article_content(article_id, content_text=content)
+            return jsonify({'success': True, 'content': content})
+        else:
+            return jsonify({'success': False, 'error': '生成失败，请检查配置'}), 500
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 
 @app.route('/static/<path:path>')
