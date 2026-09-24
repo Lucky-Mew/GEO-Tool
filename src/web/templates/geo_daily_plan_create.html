@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GEO 每日文章规划 - 创建</title>
+    <link rel="stylesheet" href="/static/css/style.css?v=15">
+    <style>
+        .plan-container {
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .page-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        .page-header h1 {
+            margin: 0;
+            color: #111827;
+            font-size: 22px;
+            font-weight: 600;
+        }
+        .back-btn {
+            background: #fff;
+            color: #374151;
+            border: 1px solid #d1d5db;
+            padding: 7px 14px;
+            border-radius: 5px;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-block;
+            font-size: 13px;
+            font-weight: 500;
+            transition: all 0.15s;
+        }
+        .back-btn:hover {
+            background: #f9fafb;
+            border-color: #9ca3af;
+        }
+        .create-card {
+            background: #fff;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        .create-card h2 {
+            margin-top: 0;
+            color: #111827;
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 16px;
+        }
+        .form-group {
+            margin-bottom: 14px;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 500;
+            color: #374151;
+            font-size: 13px;
+        }
+        .form-group input, .form-group select {
+            width: 100%;
+            padding: 7px 10px;
+            border: 1px solid #d1d5db;
+            border-radius: 5px;
+            font-size: 14px;
+            box-sizing: border-box;
+            transition: border-color 0.15s, box-shadow 0.15s;
+        }
+        .form-group input:focus, .form-group select:focus {
+            outline: none;
+            border-color: #2563eb;
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+        }
+        .template-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+        .template-card {
+            border: 1px solid #e5e7eb;
+            border-radius: 6px;
+            padding: 14px;
+            cursor: pointer;
+            transition: all 0.15s;
+            background: #fff;
+        }
+        .template-card:hover {
+            border-color: #93c5fd;
+            background: #eff6ff;
+        }
+        .template-card.selected {
+            border-color: #2563eb;
+            background: #eff6ff;
+        }
+        .template-card h3 {
+            margin: 0 0 6px 0;
+            color: #111827;
+            font-size: 14px;
+            font-weight: 600;
+        }
+        .template-card p {
+            margin: 0;
+            color: #6b7280;
+            font-size: 12px;
+            line-height: 1.5;
+        }
+        .template-card .days-tag {
+            display: inline-block;
+            margin-top: 10px;
+            background: #dbeafe;
+            color: #1d4ed8;
+            padding: 3px 10px;
+            border-radius: 10px;
+            font-size: 11px;
+            font-weight: 500;
+        }
+        .create-btn {
+            background: #2563eb;
+            color: white;
+            border: 1px solid #2563eb;
+            padding: 10px 24px;
+            border-radius: 5px;
+            font-size: 14px;
+            cursor: pointer;
+            width: 100%;
+            font-weight: 500;
+            transition: all 0.15s;
+        }
+        .create-btn:hover {
+            background: #1d4ed8;
+        }
+        .create-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        .history-section h2 {
+            color: #111827;
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 12px;
+        }
+        .history-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            margin-bottom: 20px;
+        }
+        .history-item {
+            background: #fff;
+            border: 1px solid #e5e7eb;
+            border-radius: 6px;
+            padding: 14px 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: all 0.15s;
+        }
+        .history-item:hover {
+            border-color: #d1d5db;
+        }
+        .history-info h3 {
+            margin: 0 0 4px 0;
+            color: #111827;
+            font-size: 14px;
+            font-weight: 600;
+        }
+        .history-info p {
+            margin: 0;
+            color: #6b7280;
+            font-size: 12px;
+        }
+        .status-badge {
+            padding: 3px 10px;
+            border-radius: 10px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+        .status-badge.active {
+            background: #dcfce7;
+            color: #15803d;
+        }
+        .status-badge.completed {
+            background: #f3f4f6;
+            color: #4b5563;
+        }
+        .view-btn {
+            background: #2563eb;
+            color: white;
+            border: 1px solid #2563eb;
+            padding: 6px 14px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 500;
+            transition: all 0.15s;
+        }
+        .view-btn:hover {
+            background: #1d4ed8;
+        }
+    </style>
+</head>
+<body>
+    <div class="plan-container">
+        <div class="page-header">
+            <h1>📅 GEO 每日文章规划</h1>
+            <a href="/" class="back-btn">← 返回仪表盘</a>
+        </div>
+
+        {% if plans %}
+        <div class="history-section">
+            <h2>📜 历史规划</h2>
+            <div class="history-list">
+                {% for plan in plans %}
+                <div class="history-item">
+                    <div class="history-info">
+                        <h3>{{ plan.plan_name }}</h3>
+                        <p>开始日期: {{ plan.start_date }} | 总天数: {{ plan.total_days }}天</p>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                        <span class="status-badge {{ plan.status }}">{{ plan.status == 'active' and '进行中' or '已完成' }}</span>
+                        <button class="view-btn" onclick="viewPlan({{ plan.id }})">查看详情</button>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        <div class="create-card">
+            <h2>✨ 创建新规划</h2>
+            <form id="createPlanForm">
+                <div class="form-group">
+                    <label for="planName">规划名称</label>
+                    <input type="text" id="planName" placeholder="例如：第一阶段内容规划" required>
+                </div>
+                <div class="form-group">
+                    <label for="startDate">开始日期</label>
+                    <input type="date" id="startDate" required>
+                </div>
+                <div class="form-group">
+                    <label for="totalDays">规划天数</label>
+                    <select id="totalDays">
+                        <option value="7">7天</option>
+                        <option value="14" selected>14天</option>
+                        <option value="21">21天</option>
+                        <option value="30">30天</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>方案模板</label>
+                    <div class="template-grid">
+                        {% for tpl in templates %}
+                        <div class="template-card {% if tpl.id == 'balanced' %}selected{% endif %}"
+                             data-template="{{ tpl.id }}" data-days="{{ tpl.recommended_days }}"
+                             onclick="selectTemplate(this)">
+                            <h3>{{ tpl.name }}</h3>
+                            <p>{{ tpl.description }}</p>
+                            <span class="days-tag">推荐 {{ tpl.recommended_days }} 天</span>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                <button type="submit" class="create-btn">创建规划</button>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        let selectedTemplate = 'balanced';
+        const projectId = {{ project_id or 'null' }};
+
+        // 设置默认开始日期为今天
+        document.addEventListener('DOMContentLoaded', function() {
+            const today = new Date().toISOString().split('T')[0];
+            document.getElementById('startDate').value = today;
+        });
+
+        function selectTemplate(el) {
+            document.querySelectorAll('.template-card').forEach(card => card.classList.remove('selected'));
+            el.classList.add('selected');
+            selectedTemplate = el.dataset.template;
+            document.getElementById('totalDays').value = el.dataset.days;
+        }
+
+        function viewPlan(planId) {
+            let url = '/geo/daily-plan/' + planId + '/view';
+            if (projectId) url += '?project_id=' + projectId;
+            window.location.href = url;
+        }
+
+        document.getElementById('createPlanForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+
+            const btn = e.target.querySelector('.create-btn');
+            btn.disabled = true;
+            btn.textContent = '创建中...';
+
+            try {
+                const planName = document.getElementById('planName').value;
+                const startDate = document.getElementById('startDate').value.replace(/-/g, '');
+                const totalDays = parseInt(document.getElementById('totalDays').value);
+
+                const response = await fetch('/api/geo/daily-plan/create', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        project_id: projectId,
+                        plan_name: planName,
+                        start_date: startDate,
+                        total_days: totalDays,
+                        template_type: selectedTemplate
+                    })
+                });
+
+                const result = await response.json();
+                if (result.success) {
+                    window.location.reload();
+                } else {
+                    alert('创建失败: ' + result.error);
+                }
+            } catch (err) {
+                alert('创建失败: ' + err.message);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '创建规划';
+            }
+        });
+    </script>
+</body>
+</html>

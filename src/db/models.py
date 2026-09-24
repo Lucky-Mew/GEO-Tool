@@ -222,6 +222,46 @@ def init_db():
         )
     ''')
 
+    # ========== 每日文章规划表 ==========
+
+    # 每日文章规划表
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS geo_daily_plan (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            project_id INTEGER,
+            plan_name TEXT NOT NULL,
+            start_date TEXT NOT NULL,
+            total_days INTEGER NOT NULL DEFAULT 7,
+            status TEXT DEFAULT 'active',
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (project_id) REFERENCES projects (id)
+        )
+    ''')
+
+    # 每日文章内容表
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS geo_daily_article (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            daily_plan_id INTEGER NOT NULL,
+            day_index INTEGER NOT NULL,
+            article_date TEXT,
+            article_type TEXT NOT NULL,
+            title TEXT,
+            target_keywords TEXT,
+            content_outline TEXT,
+            content_text TEXT,
+            brand_implant_level TEXT DEFAULT 'none',
+            suggested_time TEXT,
+            status TEXT DEFAULT 'pending',
+            published_url TEXT,
+            published_date TEXT,
+            notes TEXT,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (daily_plan_id) REFERENCES geo_daily_plan (id)
+        )
+    ''')
+
     # ========== 智能素材库2.0表 ==========
 
     # 文档表
@@ -275,6 +315,34 @@ def init_db():
         )
     ''')
 
+    # 竞品品牌表
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS geo_competitor_brands (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            project_id INTEGER NOT NULL,
+            brand_name TEXT NOT NULL,
+            brand_alias TEXT,
+            industry TEXT,
+            notes TEXT,
+            sort_order INTEGER DEFAULT 0,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (project_id) REFERENCES projects (id)
+        )
+    ''')
+
+    # 给文档表加竞品品牌字段（如果不存在）
+    try:
+        cursor.execute("ALTER TABLE geo_documents ADD COLUMN competitor_brand_id INTEGER")
+    except sqlite3.OperationalError:
+        pass  # 字段已存在
+
+    # 给文档表加 doc_category 字段（三大分类：brand/competitor/reference）
+    try:
+        cursor.execute("ALTER TABLE geo_documents ADD COLUMN doc_category TEXT DEFAULT 'brand'")
+    except sqlite3.OperationalError:
+        pass  # 字段已存在
+
     conn.commit()
     conn.close()
 
@@ -315,6 +383,98 @@ def get_connection():
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
     return conn
+
+
+# ========== 竞品品牌管理 ==========
+
+def add_competitor_brand(project_id: int, brand_name: str,
+                         brand_alias: str = "", industry: str = "",
+                         notes: str = "") -> int:
+    """添加竞品品牌"""
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute('''
+            INSERT INTO geo_competitor_brands (project_id, brand_name, brand_alias, industry, notes)
+            VALUES (?, ?, ?, ?, ?)
+        ''', (project_id, brand_name, brand_alias, industry, notes))
+        conn.commit()
+        return cursor.lastrowid
+    finally:
+        conn.close()
+
+
+def update_competitor_brand(brand_id: int, brand_name: str = None,
+                            brand_alias: str = None, industry: str = None,
+                            notes: str = None):
+    """更新竞品品牌信息"""
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
+        updates = []
+        params = []
+        if brand_name is not None:
+            updates.append("brand_name = ?")
+            params.append(brand_name)
+        if brand_alias is not None:
+            updates.append("brand_alias = ?")
+            params.append(brand_alias)
+        if industry is not None:
+            updates.append("industry = ?")
+            params.append(industry)
+        if notes is not None:
+            updates.append("notes = ?")
+            params.append(notes)
+        if updates:
+            params.append(brand_id)
+            cursor.execute(
+                f"UPDATE geo_competitor_brands SET {', '.join(updates)}, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                params
+            )
+            conn.commit()
+    finally:
+        conn.close()
+
+
+def delete_competitor_brand(brand_id: int):
+    """删除竞品品牌（同时把该品牌的资料文档移到未分类）"""
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
+        # 先把该品牌的文档解除关联
+        cursor.execute("UPDATE geo_documents SET competitor_brand_id = NULL WHERE competitor_brand_id = ?", (brand_id,))
+        # 再删品牌
+        cursor.execute("DELETE FROM geo_competitor_brands WHERE id = ?", (brand_id,))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def get_competitor_brands(project_id: int) -> list:
+    """获取项目的所有竞品品牌"""
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute('''
+            SELECT * FROM geo_competitor_brands
+            WHERE project_id = ?
+            ORDER BY sort_order ASC, created_at ASC
+        ''', (project_id,))
+        return [dict(row) for row in cursor.fetchall()]
+    finally:
+        conn.close()
+
+
+def get_competitor_brand(brand_id: int) -> dict:
+    """获取单个竞品品牌"""
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("SELECT * FROM geo_competitor_brands WHERE id = ?", (brand_id,))
+        row = cursor.fetchone()
+        return dict(row) if row else None
+    finally:
+        conn.close()
 
 
 # ========== 项目管理 ==========
@@ -949,6 +1109,378 @@ def mark_citation_imported(citation_id: int):
             WHERE id = ?
         ''', (citation_id,))
         conn.commit()
+    finally:
+        conn.close()
+
+
+def get_doubao_citations_count(project_id: Optional[int], import_filter: Optional[str] = None) -> int:
+    """获取豆包引用总数"""
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    try:
+        query = 'SELECT COUNT(*) as cnt FROM doubao_citations WHERE project_id IS ?'
+        params = [project_id]
+
+        if import_filter == 'imported':
+            query += ' AND is_imported = 1'
+        elif import_filter == 'unimported':
+            query += ' AND is_imported = 0'
+
+        cursor.execute(query, params)
+        row = cursor.fetchone()
+        return row['cnt'] if row else 0
+    finally:
+        conn.close()
+
+
+def cleanup_doubao_citations(project_id: Optional[int], keep_count: int = 100,
+                              keep_imported: bool = True) -> Dict[str, int]:
+    """
+    清理旧的豆包引用记录，保留最新的 N 条
+
+    Args:
+        project_id: 项目ID
+        keep_count: 保留的数量（默认100条）
+        keep_imported: 是否保留已导入的记录（即使超出数量也保留）
+
+    Returns:
+        {"deleted": 删除数量, "remaining": 剩余数量}
+    """
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    try:
+        # 先获取总数
+        cursor.execute(
+            'SELECT COUNT(*) as cnt FROM doubao_citations WHERE project_id IS ?',
+            (project_id,)
+        )
+        total_before = cursor.fetchone()['cnt']
+
+        if total_before <= keep_count:
+            return {"deleted": 0, "remaining": total_before}
+
+        # 如果保留已导入的，先统计已导入的数量
+        imported_count = 0
+        if keep_imported:
+            cursor.execute(
+                'SELECT COUNT(*) as cnt FROM doubao_citations WHERE project_id IS ? AND is_imported = 1',
+                (project_id,)
+            )
+            imported_count = cursor.fetchone()['cnt']
+
+        # 计算需要删除多少条
+        # 如果已导入的已经超过 keep_count，那就只保留已导入的
+        if keep_imported and imported_count >= keep_count:
+            # 删除所有未导入的
+            cursor.execute(
+                'DELETE FROM doubao_citations WHERE project_id IS ? AND is_imported = 0',
+                (project_id,)
+            )
+        else:
+            # 保留最新的 keep_count 条（如果 keep_imported，已导入的优先保留）
+            if keep_imported:
+                # 先删除未导入中较旧的，再看还需要删多少
+                remaining_quota = keep_count - imported_count
+                # 取最新的 remaining_quota 条未导入记录，删除其余未导入的
+                cursor.execute('''
+                    DELETE FROM doubao_citations
+                    WHERE project_id IS ? AND is_imported = 0
+                    AND id NOT IN (
+                        SELECT id FROM doubao_citations
+                        WHERE project_id IS ? AND is_imported = 0
+                        ORDER BY id DESC
+                        LIMIT ?
+                    )
+                ''', (project_id, project_id, remaining_quota))
+            else:
+                # 直接保留最新的 N 条
+                cursor.execute('''
+                    DELETE FROM doubao_citations
+                    WHERE project_id IS ?
+                    AND id NOT IN (
+                        SELECT id FROM doubao_citations
+                        WHERE project_id IS ?
+                        ORDER BY id DESC
+                        LIMIT ?
+                    )
+                ''', (project_id, project_id, keep_count))
+
+        deleted = cursor.rowcount if cursor.rowcount >= 0 else 0
+        conn.commit()
+
+        # 计算剩余数量
+        cursor.execute(
+            'SELECT COUNT(*) as cnt FROM doubao_citations WHERE project_id IS ?',
+            (project_id,)
+        )
+        remaining = cursor.fetchone()['cnt']
+
+        return {"deleted": deleted, "remaining": remaining}
+    except Exception as e:
+        conn.rollback()
+        raise e
+    finally:
+        conn.close()
+
+
+# ========== 每日文章规划 ==========
+
+def create_daily_plan(project_id: Optional[int], plan_name: str, start_date: str, total_days: int = 7) -> int:
+    """创建每日文章规划"""
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    try:
+        # 将其他活跃规划设为非活跃
+        cursor.execute('''
+            UPDATE geo_daily_plan
+            SET status = 'completed'
+            WHERE project_id IS ? AND status = 'active'
+        ''', (project_id,))
+
+        # 创建新规划
+        cursor.execute('''
+            INSERT INTO geo_daily_plan (project_id, plan_name, start_date, total_days, status)
+            VALUES (?, ?, ?, ?, 'active')
+        ''', (project_id, plan_name, start_date, total_days))
+        plan_id = cursor.lastrowid
+        conn.commit()
+        return plan_id
+    except Exception as e:
+        conn.rollback()
+        raise e
+    finally:
+        conn.close()
+
+
+def get_active_plan(project_id: Optional[int]) -> Optional[Dict]:
+    """获取当前活跃规划"""
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    try:
+        cursor.execute('''
+            SELECT * FROM geo_daily_plan
+            WHERE project_id IS ? AND status = 'active'
+            ORDER BY created_at DESC LIMIT 1
+        ''', (project_id,))
+        row = cursor.fetchone()
+        return dict(row) if row else None
+    finally:
+        conn.close()
+
+
+def get_plan(plan_id: int) -> Optional[Dict]:
+    """获取单个规划"""
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    try:
+        cursor.execute('SELECT * FROM geo_daily_plan WHERE id = ?', (plan_id,))
+        row = cursor.fetchone()
+        return dict(row) if row else None
+    finally:
+        conn.close()
+
+
+def get_all_plans(project_id: Optional[int]) -> List[Dict]:
+    """获取所有规划"""
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    try:
+        cursor.execute('''
+            SELECT * FROM geo_daily_plan
+            WHERE project_id IS ?
+            ORDER BY created_at DESC
+        ''', (project_id,))
+        return [dict(row) for row in cursor.fetchall()]
+    finally:
+        conn.close()
+
+
+def complete_plan(plan_id: int):
+    """完成规划"""
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    try:
+        cursor.execute('''
+            UPDATE geo_daily_plan
+            SET status = 'completed'
+            WHERE id = ?
+        ''', (plan_id,))
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        raise e
+    finally:
+        conn.close()
+
+
+def create_daily_article(daily_plan_id: int, day_index: int, article_type: str,
+                         article_date: Optional[str] = None, title: Optional[str] = None,
+                         target_keywords: Optional[str] = None, content_outline: Optional[str] = None,
+                         brand_implant_level: str = 'none', suggested_time: Optional[str] = None) -> int:
+    """创建每日文章"""
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    try:
+        cursor.execute('''
+            INSERT INTO geo_daily_article (
+                daily_plan_id, day_index, article_date, article_type, title,
+                target_keywords, content_outline, brand_implant_level, suggested_time, status
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')
+        ''', (daily_plan_id, day_index, article_date, article_type, title,
+              target_keywords, content_outline, brand_implant_level, suggested_time))
+        article_id = cursor.lastrowid
+        conn.commit()
+        return article_id
+    except Exception as e:
+        conn.rollback()
+        raise e
+    finally:
+        conn.close()
+
+
+def get_plan_articles(plan_id: int) -> List[Dict]:
+    """获取规划的所有文章"""
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    try:
+        cursor.execute('''
+            SELECT * FROM geo_daily_article
+            WHERE daily_plan_id = ?
+            ORDER BY day_index
+        ''', (plan_id,))
+        return [dict(row) for row in cursor.fetchall()]
+    finally:
+        conn.close()
+
+
+def get_article(article_id: int) -> Optional[Dict]:
+    """获取单个文章"""
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    try:
+        cursor.execute('SELECT * FROM geo_daily_article WHERE id = ?', (article_id,))
+        row = cursor.fetchone()
+        return dict(row) if row else None
+    finally:
+        conn.close()
+
+
+def update_article_status(article_id: int, status: str, published_url: Optional[str] = None,
+                          published_date: Optional[str] = None):
+    """更新文章状态"""
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    try:
+        updates = ['status = ?', 'updated_at = CURRENT_TIMESTAMP']
+        params = [status, article_id]
+
+        if published_url:
+            updates.insert(1, 'published_url = ?')
+            params.insert(1, published_url)
+        if published_date:
+            updates.insert(1, 'published_date = ?')
+            params.insert(1, published_date)
+
+        cursor.execute(f'''
+            UPDATE geo_daily_article
+            SET {', '.join(updates)}
+            WHERE id = ?
+        ''', params)
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        raise e
+    finally:
+        conn.close()
+
+
+def update_article_content(article_id: int, title: Optional[str] = None,
+                           target_keywords: Optional[str] = None, content_outline: Optional[str] = None,
+                           content_text: Optional[str] = None, notes: Optional[str] = None):
+    """更新文章内容"""
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    try:
+        updates = ['updated_at = CURRENT_TIMESTAMP']
+        params = []
+
+        if title is not None:
+            updates.append('title = ?')
+            params.append(title)
+        if target_keywords is not None:
+            updates.append('target_keywords = ?')
+            params.append(target_keywords)
+        if content_outline is not None:
+            updates.append('content_outline = ?')
+            params.append(content_outline)
+        if content_text is not None:
+            updates.append('content_text = ?')
+            params.append(content_text)
+        if notes is not None:
+            updates.append('notes = ?')
+            params.append(notes)
+
+        if updates:
+            params.append(article_id)
+            cursor.execute(f'''
+                UPDATE geo_daily_article
+                SET {', '.join(updates)}
+                WHERE id = ?
+            ''', params)
+            conn.commit()
+    except Exception as e:
+        conn.rollback()
+        raise e
+    finally:
+        conn.close()
+
+
+def get_plan_progress(plan_id: int) -> Dict[str, Any]:
+    """获取规划进度统计"""
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    try:
+        cursor.execute('''
+            SELECT status, COUNT(*) as count
+            FROM geo_daily_article
+            WHERE daily_plan_id = ?
+            GROUP BY status
+        ''', (plan_id,))
+
+        rows = cursor.fetchall()
+        progress = {'total': 0, 'pending': 0, 'in_progress': 0, 'published': 0, 'current_day': 1}
+
+        for row in rows:
+            status = row['status']
+            count = row['count']
+            progress['total'] += count
+            if status in progress:
+                progress[status] = count
+
+        # 找到当前待发布的文章（第一个未发布的）
+        cursor.execute('''
+            SELECT day_index FROM geo_daily_article
+            WHERE daily_plan_id = ? AND status IN ('pending', 'in_progress')
+            ORDER BY day_index LIMIT 1
+        ''', (plan_id,))
+        row = cursor.fetchone()
+        if row:
+            progress['current_day'] = row['day_index']
+
+        return progress
     finally:
         conn.close()
 
